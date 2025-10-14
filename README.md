@@ -4,7 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-> **Automation der Reinigungsvorbereitung bei mehreren Stockwerken über phyaische Schalter. Wechselt die Karte und startet in Abhängigkeit der Kartenauswahl verschieden Vorbereitungsprogramme. Der Roboter wird so je nach Auswahl zum manuellen umsetzen in einen anderen Wohnbereich oder Stockwerk vorbereitet. Die Reinigung startet automatisch nach dem umsetzen. Der Roboter waret nach der Reinigung und wechselt die Karte beim erneuten umsetzen automatisch zurück auf die Karte mit Reinigungsstation Standort.   
+> **Automation der Reinigungsvorbereitung bei mehreren Stockwerken über physikalische Zigbee2MQTT Schalter. Wechselt die Karte und startet in Abhängigkeit der Kartenauswahl verschieden Vorbereitungsprogramme. Der Roboter wird so je nach Auswahl zum manuellen umsetzen in einen anderen Wohnbereich oder Stockwerk vorbereitet. Die Reinigung startet automatisch nach dem umsetzen. Der Roboter waret nach der Reinigung und wechselt die Karte beim erneuten umsetzen automatisch zurück auf die Karte mit Reinigungsstation Standort.   
 
 ---
 
