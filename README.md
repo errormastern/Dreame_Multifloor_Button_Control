@@ -4,8 +4,7 @@
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-> **Professionelle Saugroboter-Steuerung via MQTT-Schalter**  
-> Entwickelt nach Best Practices führender Blueprint-Entwickler (Blackymas, EPMatt, etc.)
+> **Professionelle Saugroboter-Steuerung via MQTT-Schalter**
 
 ---
 
