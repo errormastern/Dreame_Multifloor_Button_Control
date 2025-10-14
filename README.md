@@ -1,10 +1,10 @@
-# 🤖 Dreame Vacuum Multi-Button Control Blueprint
+# 🤖 Dreame Vacuum Multi-Floor Button Control 
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/your-repo/vacuum-control-blueprint)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 
-> **Professionelle Saugroboter-Steuerung via MQTT-Schalter**
+> **Automation der Reinigungsvorbereitung bei mehreren Stockwerken über phyaische Schalter. Wechselt die Karte und startet in Abhängigkeit der Kartenauswahl verschieden Vorbereitungsprogramme. Der Roboter wird so je nach Auswahl zum manuellen umsetzen in einen anderen Wohnbereich oder Stockwerk vorbereitet. Die Reinigung startet automatisch nach dem umsetzen. Der Roboter waret nach der Reinigung und wechselt die Karte beim erneuten umsetzen automatisch zurück auf die Karte mit Reinigungsstation Standort.   
 
 ---
 
