@@ -77,7 +77,7 @@ Der Roboter muss folgende Entitäten bereitstellen:
 1. **Blueprint importieren:**
    - Settings → Automations & Scenes → Blueprints
    - Klick auf "Import Blueprint"
-   - URL einfügen: `https://github.com/your-repo/vacuum-control-blueprint/raw/main/vacuum_control.yaml`
+   - URL einfügen:`[https://github.com/errormastern/Dreame_Multifloor_Button_Control/raw/main/vacuum_control.yaml`
 
 2. **Automation erstellen:**
    - Klick auf "Create Automation"
