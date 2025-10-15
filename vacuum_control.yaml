@@ -1,409 +1,230 @@
 blueprint:
   name: Dreame Vacuum Multi-Button Control
-  description: |
-    ## 🤖 Professionelle Steuerung für Dreame Saugroboter via MQTT-Schalter
+  description: >
+    Professionelle Steuerung für Dreame Saugroboter via MQTT-Schalter.
     
-    Entwickelt nach Best Practices führender Blueprint-Entwickler für maximale Flexibilität und Robustheit.
-    
-    ### Features:
-    - ✅ 6 konfigurierbare Button-Actions für MQTT-Schalter
-    - ✅ Intelligente Start/Pause/Resume-Logik
-    - ✅ Automatisches Pausieren nach Pad-Befeuchtung (konfigurierbar)
-    - ✅ Kartenbasierte Reinigung mit Wiederholungen
-    - ✅ Basisstations-Map ohne Pause
-    - ✅ Dynamische Timeout-Konfiguration
-    - ✅ Vollständig GUI-editierbar
-    
-    **Version:** 1.0.0  
-    **Author:** Stefan (inspired by Blackymas & top HA Blueprint developers)  
-    **Minimum HA Version:** 2024.4.0
-    
+    Features: 6 konfigurierbare Buttons, intelligente Start/Pause/Resume-Logik,
+    kartenbasierte Reinigung mit Wiederholungen, Basisstations-Erkennung.
   domain: automation
   homeassistant:
     min_version: 2024.4.0
-  
   source_url: https://github.com/errormastern/Dreame_Multifloor_Button_Control
   
   input:
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: GERÄTE & ENTITÄTEN
-    # ══════════════════════════════════════════════════════════════════
-    device_section:
-      name: "🤖 Geräte & Entitäten"
-      icon: mdi:robot-vacuum
-      collapsed: false
-      input:
-        mqtt_switch_topic:
-          name: "MQTT Topic des Schalters"
-          description: |
-            Vollständiger MQTT-Topic-Pfad des Zigbee2MQTT-Schalters.
-            
-            **Beispiel:** `zigbee2mqtt/Schalter Staubsaugroboter`
-            
-            💡 **Tipp:** Im MQTT-Explorer nachschauen oder in Zigbee2MQTT unter dem Gerätenamen.
-          selector:
-            text:
-              multiline: false
-          default: "zigbee2mqtt/Schalter Staubsaugroboter"
-        
-        vacuum_entity:
-          name: "Vacuum-Entität"
-          description: "Die Hauptentität deines Saugroboters (Domain: vacuum)"
-          selector:
-            entity:
-              filter:
-                - domain: vacuum
-        
-        status_sensor:
-          name: "Status-Sensor"
-          description: |
-            Sensor-Entität für den aktuellen Roboterstatus.
-            
-            **Standard:** `sensor.{vacuum_name}_status`
-          selector:
-            entity:
-              filter:
-                - domain: sensor
-        
-        cleaning_mode_select:
-          name: "Cleaning Mode Select"
-          description: |
-            Select-Entität für Reinigungsmodus (Saugen/Wischen).
-            
-            **Standard:** `select.{vacuum_name}_cleaning_mode`
-          selector:
-            entity:
-              filter:
-                - domain: select
-        
-        selected_map_select:
-          name: "Ausgewählte Karte Select"
-          description: |
-            Select-Entität für Kartenauswahl.
-            
-            **Standard:** `select.{vacuum_name}_selected_map`
-          selector:
-            entity:
-              filter:
-                - domain: select
-        
-        map_camera:
-          name: "Map Camera Entity"
-          description: |
-            Kamera-Entität der aktuellen Map (für Segment-IDs).
-            
-            **Standard:** `camera.{vacuum_name}_map`
-          selector:
-            entity:
-              filter:
-                - domain: camera
+    mqtt_switch_topic:
+      name: MQTT Topic des Schalters
+      description: Vollständiger MQTT-Topic-Pfad (z.B. zigbee2mqtt/Schalter_Staubsaugroboter)
+      selector:
+        text:
+      default: "zigbee2mqtt/Schalter Staubsaugroboter"
     
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: KARTEN-KONFIGURATION
-    # ══════════════════════════════════════════════════════════════════
-    maps_section:
-      name: "🗺️ Karten-Konfiguration"
-      icon: mdi:map
-      collapsed: false
-      input:
-        base_station_map_name:
-          name: "Basisstations-Karte"
-          description: |
-            Name der Karte mit der Ladestation (ohne Pause nach Start).
-            
-            **Beispiel:** Wenn die Basisstation im Wohnzimmer steht → "Wohnzimmer"
-            
-            ⚠️ **Wichtig:** Exakt so eingeben, wie in der Map-Select-Entity angezeigt!
-          selector:
-            text:
-              multiline: false
-          default: "Wohnzimmer"
-        
-        map_1_name:
-          name: "Karte 1 - Name"
-          description: "Anzeigename für Karte 1 (z.B. 'Wohnzimmer')"
-          selector:
-            text:
-          default: "Wohnzimmer"
-        
-        map_2_name:
-          name: "Karte 2 - Name"
-          description: "Anzeigename für Karte 2 (z.B. 'Esszimmer')"
-          selector:
-            text:
-          default: "Esszimmer"
-        
-        map_3_name:
-          name: "Karte 3 - Name"
-          description: "Anzeigename für Karte 3 (z.B. 'Obergeschoss')"
-          selector:
-            text:
-          default: "Obergeschoss"
+    vacuum_entity:
+      name: Vacuum-Entität
+      selector:
+        entity:
+          filter:
+            domain: vacuum
     
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: BUTTON-ZUWEISUNGEN
-    # ══════════════════════════════════════════════════════════════════
-    buttons_section:
-      name: "🎮 Button-Zuweisungen"
-      icon: mdi:gesture-tap-button
-      collapsed: false
-      input:
-        button_1_action:
-          name: "Button 1 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 1.
-            
-            **Standard-Funktion:** Modus "Nur Saugen"
-          selector:
-            text:
-          default: "1_single"
-        
-        button_2_action:
-          name: "Button 2 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 2.
-            
-            **Standard-Funktion:** Modus "Saugen + Wischen"
-          selector:
-            text:
-          default: "2_single"
-        
-        button_3_action:
-          name: "Button 3 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 3.
-            
-            **Standard-Funktion:** START/PAUSE/RESUME
-          selector:
-            text:
-          default: "3_single"
-        
-        button_4_action:
-          name: "Button 4 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 4.
-            
-            **Standard-Funktion:** Karte 1 wählen
-          selector:
-            text:
-          default: "4_single"
-        
-        button_5_action:
-          name: "Button 5 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 5.
-            
-            **Standard-Funktion:** Karte 2 wählen
-          selector:
-            text:
-          default: "5_single"
-        
-        button_6_action:
-          name: "Button 6 - Action Value"
-          description: |
-            MQTT Payload-Wert für Button 6.
-            
-            **Standard-Funktion:** Karte 3 wählen
-          selector:
-            text:
-          default: "6_single"
+    status_sensor:
+      name: Status-Sensor
+      selector:
+        entity:
+          filter:
+            domain: sensor
     
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: REINIGUNGS-MODI
-    # ══════════════════════════════════════════════════════════════════
-    cleaning_section:
-      name: "🧹 Reinigungs-Modi"
-      icon: mdi:broom
-      collapsed: false
-      input:
-        sweeping_mode_value:
-          name: "Nur Saugen - Option"
-          description: |
-            Genauer Wert für "Nur Saugen" aus der cleaning_mode Select-Entity.
-            
-            💡 **Tipp:** In den Entwicklerwerkzeugen → States → Entity auswählen → "State" kopieren
-          selector:
-            text:
-          default: "sweeping"
-        
-        sweeping_mopping_mode_value:
-          name: "Saugen + Wischen - Option"
-          description: "Genauer Wert für 'Saugen und Wischen'"
-          selector:
-            text:
-          default: "sweeping_and_mopping"
-        
-        cleaning_repeats:
-          name: "Reinigungsdurchgänge"
-          description: |
-            Anzahl der Reinigungsdurchgänge pro Raum.
-            
-            **Hinweis:** Gilt für alle Maps außer Basisstation.
-          selector:
-            number:
-              min: 1
-              max: 3
-              step: 1
-              mode: slider
-          default: 2
+    cleaning_mode_select:
+      name: Cleaning Mode Select
+      selector:
+        entity:
+          filter:
+            domain: select
     
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: STATUS & TIMEOUTS
-    # ══════════════════════════════════════════════════════════════════
-    status_section:
-      name: "⏱️ Status & Timeouts"
-      icon: mdi:timer-cog
-      collapsed: true
-      input:
-        cleaning_states:
-          name: "Aktive Reinigungs-Status"
-          description: |
-            Liste der Status-Werte, die eine aktive Reinigung bedeuten.
-            
-            Komma-getrennt, **ohne Leerzeichen**.
-            
-            **Standard:** cleaning,returning,zone_cleaning,room_cleaning
-          selector:
-            text:
-              multiline: false
-          default: "cleaning,returning,zone_cleaning,room_cleaning"
-        
-        paused_state:
-          name: "Pausiert-Status"
-          description: "Status-Wert wenn Reinigung pausiert ist"
-          selector:
-            text:
-          default: "paused"
-        
-        moistening_status:
-          name: "Befeuchtungs-Status (Optional)"
-          description: |
-            Status während Pad-Befeuchtung (Nur für Wischmodus).
-            
-            ⚠️ **Leer lassen** wenn unbekannt → Reinigung wird sofort nach Start pausiert.
-            
-            📋 **So herausfinden:**
-            1. Wischmodus starten auf Map 2/3
-            2. Während Befeuchtung → Entwicklerwerkzeuge → States
-            3. Status-Sensor Wert kopieren (z.B. "washing_mop")
-          selector:
-            text:
-              multiline: false
-          default: ""
-        
-        start_timeout:
-          name: "Start-Timeout"
-          description: "Max. Wartezeit bis Reinigung startet"
-          selector:
-            number:
-              min: 30
-              max: 300
-              step: 10
-              unit_of_measurement: "s"
-              mode: slider
-          default: 120
-        
-        moistening_timeout:
-          name: "Befeuchtungs-Timeout"
-          description: "Max. Wartezeit für Pad-Befeuchtung"
-          selector:
-            number:
-              min: 10
-              max: 180
-              step: 5
-              unit_of_measurement: "s"
-              mode: slider
-          default: 60
+    selected_map_select:
+      name: Ausgewählte Karte Select
+      selector:
+        entity:
+          filter:
+            domain: select
     
-    # ══════════════════════════════════════════════════════════════════
-    # SEKTION: ERWEITERTE OPTIONEN
-    # ══════════════════════════════════════════════════════════════════
-    advanced_section:
-      name: "⚙️ Erweiterte Optionen"
-      icon: mdi:cog
-      collapsed: true
-      input:
-        use_segment_service:
-          name: "Segment-Service nutzen"
-          description: |
-            Nutzt `vacuum_clean_segment` mit repeats statt `vacuum.start`.
-            
-            ✅ **Empfohlen** für präzise Wiederholungen pro Raum.
-            
-            ⚠️ Erfordert, dass alle Räume der Map konfiguriert sind.
-          selector:
-            boolean:
-          default: true
-        
-        debug_mode:
-          name: "Debug-Modus"
-          description: |
-            Aktiviert zusätzliche Persistent Notifications für Debugging.
-            
-            💡 Hilfreich beim ersten Setup!
-          selector:
-            boolean:
-          default: false
+    map_camera:
+      name: Map Camera Entity
+      selector:
+        entity:
+          filter:
+            domain: camera
+    
+    base_station_map_name:
+      name: Basisstations-Karte Name
+      selector:
+        text:
+      default: "Wohnzimmer"
+    
+    map_1_name:
+      name: Karte 1 Name
+      selector:
+        text:
+      default: "Wohnzimmer"
+    
+    map_2_name:
+      name: Karte 2 Name
+      selector:
+        text:
+      default: "Esszimmer"
+    
+    map_3_name:
+      name: Karte 3 Name
+      selector:
+        text:
+      default: "Obergeschoss"
+    
+    button_1_action:
+      name: Button 1 Action Value
+      selector:
+        text:
+      default: "1_single"
+    
+    button_2_action:
+      name: Button 2 Action Value
+      selector:
+        text:
+      default: "2_single"
+    
+    button_3_action:
+      name: Button 3 Action Value
+      selector:
+        text:
+      default: "3_single"
+    
+    button_4_action:
+      name: Button 4 Action Value
+      selector:
+        text:
+      default: "4_single"
+    
+    button_5_action:
+      name: Button 5 Action Value
+      selector:
+        text:
+      default: "5_single"
+    
+    button_6_action:
+      name: Button 6 Action Value
+      selector:
+        text:
+      default: "6_single"
+    
+    sweeping_mode_value:
+      name: Nur Saugen - Modus Wert
+      selector:
+        text:
+      default: "sweeping"
+    
+    sweeping_mopping_mode_value:
+      name: Saugen + Wischen - Modus Wert
+      selector:
+        text:
+      default: "sweeping_and_mopping"
+    
+    cleaning_repeats:
+      name: Reinigungsdurchgänge
+      selector:
+        number:
+          min: 1
+          max: 3
+          step: 1
+          mode: slider
+      default: 2
+    
+    cleaning_states:
+      name: Aktive Reinigungs-Status
+      selector:
+        text:
+      default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
+    
+    paused_state:
+      name: Pausiert-Status
+      selector:
+        text:
+      default: "paused"
+    
+    moistening_status:
+      name: Befeuchtungs-Status
+      selector:
+        text:
+      default: ""
+    
+    start_timeout:
+      name: Start-Timeout
+      selector:
+        number:
+          min: 30
+          max: 300
+          step: 10
+          unit_of_measurement: s
+          mode: slider
+      default: 120
+    
+    moistening_timeout:
+      name: Befeuchtungs-Timeout
+      selector:
+        number:
+          min: 10
+          max: 180
+          step: 5
+          unit_of_measurement: s
+          mode: slider
+      default: 60
+    
+    use_segment_service:
+      name: Segment-Service nutzen
+      selector:
+        boolean:
+      default: true
+    
+    debug_mode:
+      name: Debug-Modus
+      selector:
+        boolean:
+      default: false
 
-# ════════════════════════════════════════════════════════════════════════
-# TRIGGER
-# ════════════════════════════════════════════════════════════════════════
 triggers:
   - trigger: mqtt
     topic: !input mqtt_switch_topic
     id: mqtt_button_press
 
-# ════════════════════════════════════════════════════════════════════════
-# VARIABLES
-# ════════════════════════════════════════════════════════════════════════
 variables:
-  # Input Referenzen
   vacuum_entity: !input vacuum_entity
   status_sensor: !input status_sensor
   cleaning_mode_select: !input cleaning_mode_select
   selected_map_select: !input selected_map_select
   map_camera: !input map_camera
-  
-  # Maps
   base_station_map: !input base_station_map_name
   map_1_name: !input map_1_name
   map_2_name: !input map_2_name
   map_3_name: !input map_3_name
-  
-  # Buttons
   btn_1: !input button_1_action
   btn_2: !input button_2_action
   btn_3: !input button_3_action
   btn_4: !input button_4_action
   btn_5: !input button_5_action
   btn_6: !input button_6_action
-  
-  # Modes
   mode_sweeping: !input sweeping_mode_value
   mode_sweeping_mopping: !input sweeping_mopping_mode_value
   repeats: !input cleaning_repeats
-  
-  # Status & Timeouts
   cleaning_states_raw: !input cleaning_states
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
   paused_state: !input paused_state
   moistening_status: !input moistening_status
   start_timeout: !input start_timeout
   moistening_timeout: !input moistening_timeout
-  
-  # Advanced
   use_segment_service: !input use_segment_service
   debug_mode: !input debug_mode
-  
-  # Runtime Variables
   button_action: "{{ trigger.payload_json.action }}"
   current_status: "{{ states(status_sensor) }}"
   current_mode: "{{ states(cleaning_mode_select) }}"
   current_map_name: "{{ states(selected_map_select) }}"
   current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
   is_base_station_map: "{{ current_map_name == base_station_map }}"
-  
-  # Segment IDs (für vacuum_clean_segment)
   map_segments_raw: "{{ state_attr(map_camera, 'segments') }}"
   map_segments: >
     {% if map_segments_raw is not none %}
@@ -412,36 +233,24 @@ variables:
       []
     {% endif %}
 
-# ════════════════════════════════════════════════════════════════════════
-# CONDITIONS
-# ════════════════════════════════════════════════════════════════════════
 conditions:
   - condition: template
     value_template: "{{ button_action is defined and button_action != '' }}"
 
-# ════════════════════════════════════════════════════════════════════════
-# ACTIONS
-# ════════════════════════════════════════════════════════════════════════
 actions:
-  # Debug Notification (Optional)
   - if:
       - condition: template
         value_template: "{{ debug_mode }}"
     then:
       - action: persistent_notification.create
         data:
-          title: "🔍 Vacuum Blueprint Debug"
+          title: "🔍 Vacuum Debug"
           message: |
-            **Button:** {{ button_action }}
-            **Status:** {{ current_status }}
-            **Map:** {{ current_map_name }} (ID: {{ current_map_id }})
-            **Modus:** {{ current_mode }}
-            **Basisstation:** {{ is_base_station_map }}
+            Button: {{ button_action }}
+            Status: {{ current_status }}
+            Map: {{ current_map_name }}
   
   - choose:
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 1: Modus → Nur Saugen
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_1 }}"
@@ -451,19 +260,7 @@ actions:
               entity_id: !input cleaning_mode_select
             data:
               option: "{{ mode_sweeping }}"
-          
-          - if:
-              - condition: template
-                value_template: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Modus Gewechselt"
-                  message: "Reinigungsmodus: Nur Saugen"
       
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 2: Modus → Saugen + Wischen
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_2 }}"
@@ -473,27 +270,12 @@ actions:
               entity_id: !input cleaning_mode_select
             data:
               option: "{{ mode_sweeping_mopping }}"
-          
-          - if:
-              - condition: template
-                value_template: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Modus Gewechselt"
-                  message: "Reinigungsmodus: Saugen & Wischen"
       
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 3: START / PAUSE / RESUME
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_3 }}"
         sequence:
           - choose:
-              # ──────────────────────────────────────────────────────
-              # 3.1: Reinigung läuft → PAUSE
-              # ──────────────────────────────────────────────────────
               - conditions:
                   - condition: template
                     value_template: "{{ current_status in cleaning_states }}"
@@ -501,19 +283,7 @@ actions:
                   - action: vacuum.pause
                     target:
                       entity_id: !input vacuum_entity
-                  
-                  - if:
-                      - condition: template
-                        value_template: "{{ debug_mode }}"
-                    then:
-                      - action: persistent_notification.create
-                        data:
-                          title: "⏸️ Reinigung Pausiert"
-                          message: "Vorheriger Status: {{ current_status }}"
               
-              # ──────────────────────────────────────────────────────
-              # 3.2: Reinigung pausiert → RESUME
-              # ──────────────────────────────────────────────────────
               - conditions:
                   - condition: template
                     value_template: "{{ current_status == paused_state }}"
@@ -521,24 +291,9 @@ actions:
                   - action: vacuum.start
                     target:
                       entity_id: !input vacuum_entity
-                  
-                  - if:
-                      - condition: template
-                        value_template: "{{ debug_mode }}"
-                    then:
-                      - action: persistent_notification.create
-                        data:
-                          title: "▶️ Reinigung Fortgesetzt"
-                          message: "Reinigung wird fortgesetzt"
             
-            # ──────────────────────────────────────────────────────
-            # 3.3: DEFAULT → START (mit Map-basierter Logik)
-            # ──────────────────────────────────────────────────────
             default:
               - choose:
-                  # ═══════════════════════════════════════════════
-                  # BASISSTATIONS-MAP: Direkt starten (kein Pause)
-                  # ═══════════════════════════════════════════════
                   - conditions:
                       - condition: template
                         value_template: "{{ is_base_station_map }}"
@@ -547,7 +302,6 @@ actions:
                           - condition: template
                             value_template: "{{ use_segment_service and map_segments | length > 0 }}"
                         then:
-                          # Segment-basierter Start mit Repeats
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: !input vacuum_entity
@@ -555,32 +309,15 @@ actions:
                               segments: "{{ map_segments }}"
                               repeats: "{{ repeats }}"
                         else:
-                          # Standard-Start
                           - action: vacuum.start
                             target:
                               entity_id: !input vacuum_entity
-                      
-                      - if:
-                          - condition: template
-                            value_template: "{{ debug_mode }}"
-                        then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "🏠 Basisstations-Reinigung"
-                              message: |
-                                Map: {{ current_map_name }}
-                                Durchgänge: {{ repeats }}x
-                                Methode: {{ 'Segment-Service' if use_segment_service else 'Standard' }}
                 
-                # ═══════════════════════════════════════════════
-                # ANDERE MAPS: Start → Warten → Pause
-                # ═══════════════════════════════════════════════
                 default:
                   - if:
                       - condition: template
                         value_template: "{{ use_segment_service and map_segments | length > 0 }}"
                     then:
-                      # Segment-basierter Start
                       - action: dreame_vacuum.vacuum_clean_segment
                         target:
                           entity_id: !input vacuum_entity
@@ -588,18 +325,15 @@ actions:
                           segments: "{{ map_segments }}"
                           repeats: "{{ repeats }}"
                     else:
-                      # Standard-Start
                       - action: vacuum.start
                         target:
                           entity_id: !input vacuum_entity
                   
-                  # Warten bis Reinigung startet
                   - wait_template: "{{ states(status_sensor) in cleaning_states }}"
                     timeout:
                       seconds: !input start_timeout
                     continue_on_timeout: false
                   
-                  # Bei Wischmodus: Optional auf Befeuchtung warten
                   - if:
                       - condition: template
                         value_template: "{{ current_mode == mode_sweeping_mopping and moistening_status != '' }}"
@@ -609,28 +343,10 @@ actions:
                           seconds: !input moistening_timeout
                         continue_on_timeout: true
                   
-                  # Reinigung pausieren (für Transport)
                   - action: vacuum.pause
                     target:
                       entity_id: !input vacuum_entity
-                  
-                  - if:
-                      - condition: template
-                        value_template: "{{ debug_mode }}"
-                    then:
-                      - action: persistent_notification.create
-                        data:
-                          title: "🚚 Transport-Modus"
-                          message: |
-                            Map: {{ current_map_name }}
-                            Modus: {{ current_mode }}
-                            Durchgänge: {{ repeats }}x
-                            
-                            ⏸️ Pausiert für Transport
       
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 4: Karte 1 wählen
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_4 }}"
@@ -640,19 +356,7 @@ actions:
               entity_id: !input selected_map_select
             data:
               option: "{{ map_1_name }}"
-          
-          - if:
-              - condition: template
-                value_template: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "🗺️ Karte Gewechselt"
-                  message: "Neue Karte: {{ map_1_name }}"
       
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 5: Karte 2 wählen
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_5 }}"
@@ -662,19 +366,7 @@ actions:
               entity_id: !input selected_map_select
             data:
               option: "{{ map_2_name }}"
-          
-          - if:
-              - condition: template
-                value_template: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "🗺️ Karte Gewechselt"
-                  message: "Neue Karte: {{ map_2_name }}"
       
-      # ════════════════════════════════════════════════════════════════
-      # BUTTON 6: Karte 3 wählen
-      # ════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
             value_template: "{{ button_action == btn_6 }}"
@@ -684,39 +376,9 @@ actions:
               entity_id: !input selected_map_select
             data:
               option: "{{ map_3_name }}"
-          
-          - if:
-              - condition: template
-                value_template: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "🗺️ Karte Gewechselt"
-                  message: "Neue Karte: {{ map_3_name }}"
     
-    # Fallback für unbekannte Actions
-    default:
-      - if:
-          - condition: template
-            value_template: "{{ debug_mode }}"
-        then:
-          - action: persistent_notification.create
-            data:
-              title: "⚠️ Unbekannte Button-Action"
-              message: |
-                Empfangene Action: {{ button_action }}
-                
-                Konfigurierte Actions:
-                - Button 1: {{ btn_1 }}
-                - Button 2: {{ btn_2 }}
-                - Button 3: {{ btn_3 }}
-                - Button 4: {{ btn_4 }}
-                - Button 5: {{ btn_5 }}
-                - Button 6: {{ btn_6 }}
+    default: []
 
-# ════════════════════════════════════════════════════════════════════════
-# MODE CONFIGURATION
-# ════════════════════════════════════════════════════════════════════════
 mode: queued
 max: 10
 max_exceeded: silent
