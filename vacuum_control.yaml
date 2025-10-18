@@ -3,8 +3,17 @@ blueprint:
   description: >
     Professionelle Steuerung für Dreame Saugroboter via MQTT-Schalter.
     
-    Features: 6 konfigurierbare Buttons, intelligente Start/Pause/Resume-Logik,
-    kartenbasierte Reinigung mit Wiederholungen, Basisstations-Erkennung.
+    **Features:**
+    - 6 konfigurierbare Buttons für flexible Steuerung
+    - Intelligente Start/Pause/Resume-Logik mit Statuserkennung
+    - Kartenbasierte Reinigung mit konfigurierbaren Wiederholungen
+    - Automatische Basisstations-Erkennung und -Behandlung
+    - Debug-Modus für Fehlersuche
+    
+    **Voraussetzungen:**
+    - Dreame Vacuum Integration installiert
+    - MQTT-Schalter (z.B. Zigbee) konfiguriert
+    - Mindestens 1 gespeicherte Karte im Roboter
   domain: automation
   homeassistant:
     min_version: 2024.4.0
@@ -13,13 +22,25 @@ blueprint:
   input:
     mqtt_switch_topic:
       name: MQTT Topic des Schalters
-      description: Vollständiger MQTT-Topic-Pfad (z.B. zigbee2mqtt/Schalter_Staubsaugroboter)
+      description: >
+        Der vollständige MQTT-Topic-Pfad des Schalters.
+        
+        **Beispiel:** `zigbee2mqtt/Schalter_Staubsaugroboter`
+        
+        **Hinweis:** Den genauen Topic findest du in MQTT Explorer oder in den 
+        Zigbee2MQTT-Logs. Format ist üblicherweise: `zigbee2mqtt/[Gerätename]`
       selector:
         text:
       default: "zigbee2mqtt/Schalter Staubsaugroboter"
     
     vacuum_entity:
       name: Vacuum-Entität
+      description: >
+        Die Hauptentität des Dreame Saugroboters.
+        
+        **Format:** `vacuum.dreame_[modell]`
+        
+        Diese Entität wird für alle Steuerbefehle (Start, Pause, etc.) verwendet.
       selector:
         entity:
           filter:
@@ -27,6 +48,13 @@ blueprint:
     
     status_sensor:
       name: Status-Sensor
+      description: >
+        Der Sensor, der den aktuellen Betriebsstatus des Roboters anzeigt.
+        
+        **Format:** `sensor.dreame_[modell]_status`
+        
+        Zeigt Werte wie: `cleaning`, `paused`, `returning`, `idle`, etc.
+        Wichtig für die Start/Pause/Resume-Logik.
       selector:
         entity:
           filter:
@@ -34,6 +62,13 @@ blueprint:
     
     cleaning_mode_select:
       name: Cleaning Mode Select
+      description: >
+        Die Select-Entität zur Auswahl des Reinigungsmodus.
+        
+        **Format:** `select.dreame_[modell]_cleaning_mode`
+        
+        Optionen: `sweeping` (nur Saugen), `mopping` (nur Wischen), 
+        `sweeping_and_mopping` (Saugen + Wischen)
       selector:
         entity:
           filter:
@@ -41,6 +76,12 @@ blueprint:
     
     selected_map_select:
       name: Ausgewählte Karte Select
+      description: >
+        Die Select-Entität zur Auswahl der aktiven Karte.
+        
+        **Format:** `select.dreame_[modell]_selected_map`
+        
+        Zeigt alle gespeicherten Karten an. Button 4-6 wechseln zwischen diesen Karten.
       selector:
         entity:
           filter:
@@ -48,6 +89,13 @@ blueprint:
     
     map_camera:
       name: Map Camera Entity
+      description: >
+        Die Kamera-Entität, die die Kartendaten und Segmente bereitstellt.
+        
+        **Format:** `camera.dreame_[modell]_map`
+        
+        Wichtig: Diese Entity enthält die Segment-IDs im `segments` Attribut,
+        die für die raumbasierte Reinigung benötigt werden.
       selector:
         entity:
           filter:
@@ -55,78 +103,152 @@ blueprint:
     
     base_station_map_name:
       name: Basisstations-Karte Name
+      description: >
+        Der exakte Name der Karte, auf der die Ladestation steht.
+        
+        **Wichtig:** Muss EXAKT mit dem Namen in der `selected_map` Select-Entity übereinstimmen!
+        
+        Auf dieser Karte wird bei Button 3 direkt gereinigt, ohne vorher zu pausieren.
       selector:
         text:
       default: "Wohnzimmer"
     
     map_1_name:
-      name: Karte 1 Name
+      name: Karte 1 Name (Button 4)
+      description: >
+        Name der ersten Karte für Button 4.
+        
+        **Muss EXAKT** mit dem Kartennamen in der Dreame-App übereinstimmen.
+        
+        **Tipp:** Öffne die `selected_map` Select-Entity in den Entwicklertools
+        und kopiere den Namen aus den verfügbaren Optionen.
       selector:
         text:
       default: "Wohnzimmer"
     
     map_2_name:
-      name: Karte 2 Name
+      name: Karte 2 Name (Button 5)
+      description: >
+        Name der zweiten Karte für Button 5.
+        
+        **Beispiel:** `Esszimmer`, `Erdgeschoss`, `EG`
       selector:
         text:
       default: "Esszimmer"
     
     map_3_name:
-      name: Karte 3 Name
+      name: Karte 3 Name (Button 6)
+      description: >
+        Name der dritten Karte für Button 6.
+        
+        **Beispiel:** `Obergeschoss`, `OG`, `1. Stock`
       selector:
         text:
       default: "Obergeschoss"
     
     button_1_action:
       name: Button 1 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 1 (Nur Saugen).
+        
+        **Standard:** `1_single` (für einfachen Knopfdruck)
+        
+        **Andere Optionen:** `1_double` (Doppelklick), `1_long` (Lang drücken)
+        
+        Diesen Wert findest du in MQTT Explorer beim Drücken des Buttons.
       selector:
         text:
       default: "1_single"
     
     button_2_action:
       name: Button 2 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 2 (Saugen + Wischen).
+        
+        **Standard:** `2_single`
       selector:
         text:
       default: "2_single"
     
     button_3_action:
       name: Button 3 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 3 (Start/Pause/Resume).
+        
+        **Standard:** `3_single`
+        
+        **Funktion:**
+        - Läuft bereits: Pause
+        - Pausiert: Resume
+        - Idle: Start Reinigung
       selector:
         text:
       default: "3_single"
     
     button_4_action:
       name: Button 4 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 4 (Karte 1 wechseln).
+        
+        **Standard:** `4_single`
       selector:
         text:
       default: "4_single"
     
     button_5_action:
       name: Button 5 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 5 (Karte 2 wechseln).
+        
+        **Standard:** `5_single`
       selector:
         text:
       default: "5_single"
     
     button_6_action:
       name: Button 6 Action Value
+      description: >
+        Der MQTT Action-Wert für Button 6 (Karte 3 wechseln).
+        
+        **Standard:** `6_single`
       selector:
         text:
       default: "6_single"
     
     sweeping_mode_value:
       name: Nur Saugen - Modus Wert
+      description: >
+        Der exakte Wert für "Nur Saugen" in der Cleaning Mode Select-Entity.
+        
+        **Standard:** `sweeping`
+        
+        **Prüfen:** Öffne die Select-Entity in den Entwicklertools und 
+        kopiere den exakten Wert (Groß-/Kleinschreibung beachten!).
       selector:
         text:
       default: "sweeping"
     
     sweeping_mopping_mode_value:
       name: Saugen + Wischen - Modus Wert
+      description: >
+        Der exakte Wert für "Saugen + Wischen" in der Cleaning Mode Select-Entity.
+        
+        **Standard:** `sweeping_and_mopping`
       selector:
         text:
       default: "sweeping_and_mopping"
     
     cleaning_repeats:
       name: Reinigungsdurchgänge
+      description: >
+        Anzahl der Reinigungsdurchgänge pro Raum/Segment.
+        
+        **Empfehlung:**
+        - 1 = Schnelle Reinigung
+        - 2 = Standard (empfohlen)
+        - 3 = Intensive Reinigung
+        
+        Wird nur bei Segment-Service verwendet.
       selector:
         number:
           min: 1
@@ -137,24 +259,52 @@ blueprint:
     
     cleaning_states:
       name: Aktive Reinigungs-Status
+      description: >
+        Kommagetrennte Liste aller Status, die als "aktive Reinigung" gelten.
+        
+        **Standard-Werte (nicht ändern!):**
+        `cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping`
+        
+        Diese Werte werden verwendet, um zu erkennen, ob der Roboter gerade arbeitet.
       selector:
         text:
       default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
     
     paused_state:
       name: Pausiert-Status
+      description: >
+        Der Status-Wert, der anzeigt, dass der Roboter pausiert ist.
+        
+        **Standard:** `paused`
+        
+        Wird für die Resume-Funktion benötigt.
       selector:
         text:
       default: "paused"
     
     moistening_status:
       name: Befeuchtungs-Status
+      description: >
+        Der Status während des Mop-Befeuchtens (optional).
+        
+        **Beispiel:** `moistening`, `wetting_mop`
+        
+        **Leer lassen**, wenn dein Modell keinen separaten Befeuchtungs-Status hat.
+        Wird nur bei Saugen+Wischen auf fremden Karten verwendet, um auf das 
+        Befeuchten zu warten, bevor pausiert wird.
       selector:
         text:
       default: ""
     
     start_timeout:
       name: Start-Timeout
+      description: >
+        Maximale Wartezeit (in Sekunden), bis der Roboter den Reinigungsstatus erreicht.
+        
+        **Empfehlung:** 120 Sekunden
+        
+        Wird bei Kartenwechsel benötigt: Warte auf Start → dann pausieren.
+        Bei Timeout wird die Automation abgebrochen (Fehlerschutz).
       selector:
         number:
           min: 30
@@ -166,6 +316,13 @@ blueprint:
     
     moistening_timeout:
       name: Befeuchtungs-Timeout
+      description: >
+        Maximale Wartezeit (in Sekunden) auf den Befeuchtungs-Status.
+        
+        **Empfehlung:** 60 Sekunden
+        
+        Nur relevant, wenn ein Befeuchtungs-Status konfiguriert ist.
+        Bei Timeout wird fortgefahren (kein Abbruch).
       selector:
         number:
           min: 10
@@ -177,12 +334,29 @@ blueprint:
     
     use_segment_service:
       name: Segment-Service nutzen
+      description: >
+        **EIN:** Verwendet `dreame_vacuum.vacuum_clean_segment` für raumbasierte Reinigung.
+        
+        **AUS:** Verwendet `vacuum.start` für Komplettreinigung der Karte.
+        
+        **Empfehlung:** EIN (ermöglicht gezielte Raum-Reinigung mit Wiederholungen)
+        
+        **Voraussetzung:** Die Map Camera Entity muss Segment-Daten liefern.
       selector:
         boolean:
       default: true
     
     debug_mode:
       name: Debug-Modus
+      description: >
+        Zeigt bei jedem Button-Druck eine Benachrichtigung mit Debug-Informationen.
+        
+        **Enthält:**
+        - Gedrückter Button
+        - Aktueller Status
+        - Aktuelle Karte
+        
+        **Empfehlung:** Nur bei Problemen aktivieren.
       selector:
         boolean:
       default: false
