@@ -1,0 +1,942 @@
+blueprint:
+  name: "Dreame Vacuum Multi-Button Control"
+  description: >
+    **Version: 0.2.5**
+
+
+    Professional multi-floor control for Dreame vacuum cleaners with intelligent automation.
+
+
+    **Key Features:**
+
+    • Zero configuration - Only select robot entity, everything else auto-detected
+
+    • Flexible trigger system - MQTT, Device, State, or Event triggers per function
+
+    • Intelligent start/pause/resume based on robot status and current map
+
+    • Automatic base station detection - No pause needed when starting on home map
+
+    • Room/segment cleaning support with configurable repeat counts
+
+    • Self-clean switch automation based on current map
+
+
+    **Available Functions:**
+
+    • Mode switching (sweep only / sweep + mop)
+
+    • Smart start/pause/resume
+
+    • Map switching (up to 3 maps)
+
+
+    **Requirements:**
+
+    • Home Assistant ≥ 2024.10.0
+
+    • Dreame Vacuum Integration (v2.0.0b19+)
+
+    • At least one saved map configured in robot
+
+
+    📖 [Documentation](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
+  domain: automation
+  homeassistant:
+    min_version: 2024.10.0
+  source_url: https://github.com/errormastern/Dreame_Multifloor_Button_Control/blob/main/vacuum_control.yaml
+  input:
+    # ========================================
+    # ROBOT CONFIGURATION
+    # ========================================
+    robot_config:
+      name: "Robot Configuration"
+      description: "Select your Dreame vacuum robot. All related entities are auto-detected."
+      icon: mdi:robot-vacuum
+      collapsed: false
+      input:
+        vacuum_entity:
+          name: "Vacuum Entity"
+          description: "Main vacuum entity (e.g., vacuum.dreame_x10). Status, mode, map entities are auto-detected."
+          selector:
+            entity:
+              filter:
+                - domain: vacuum
+              multiple: false
+
+    # ========================================
+    # FUNCTION: SWEEP ONLY MODE
+    # ========================================
+    function_sweep_only:
+      name: "Function: Sweep Only Mode"
+      description: "Set vacuum to sweep-only mode (no mopping). Activates when triggers are configured."
+      icon: mdi:vacuum
+      collapsed: true
+      input:
+        sweep_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_sweep` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # FUNCTION: SWEEP + MOP MODE
+    # ========================================
+    function_sweep_mop:
+      name: "Function: Sweep + Mop Mode"
+      description: "Set vacuum to sweep + mop mode (full cleaning). Activates when triggers are configured."
+      icon: mdi:water
+      collapsed: true
+      input:
+        mop_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_mop` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # FUNCTION: SMART START/PAUSE/RESUME
+    # ========================================
+    function_smart_start:
+      name: "Function: Smart Start/Pause/Resume"
+      description: "Intelligent control: Start when idle, pause when cleaning, resume when paused. Activates when triggers are configured."
+      icon: mdi:play-pause
+      collapsed: true
+      input:
+        start_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_start` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # FUNCTION: MAP 1 SWITCH
+    # ========================================
+    function_map_1:
+      name: "Function: Map 1 Switch"
+      description: "Switch to Map 1 (auto-detected). Activates when triggers are configured."
+      icon: mdi:home-floor-1
+      collapsed: true
+      input:
+        map1_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map1` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # FUNCTION: MAP 2 SWITCH
+    # ========================================
+    function_map_2:
+      name: "Function: Map 2 Switch"
+      description: "Switch to Map 2 (auto-detected). Activates when triggers are configured."
+      icon: mdi:home-floor-2
+      collapsed: true
+      input:
+        map2_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map2` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # FUNCTION: MAP 3 SWITCH
+    # ========================================
+    function_map_3:
+      name: "Function: Map 3 Switch"
+      description: "Switch to Map 3 (auto-detected). Activates when triggers are configured."
+      icon: mdi:home-floor-3
+      collapsed: true
+      input:
+        map3_trigger:
+          name: "Trigger Configuration"
+          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map3` in advanced options for manual routing."
+          selector:
+            trigger:
+          default: []
+
+    # ========================================
+    # CLEANING SETTINGS
+    # ========================================
+    cleaning_settings:
+      name: "Cleaning Settings"
+      description: "Configure cleaning modes, states, and repeat counts"
+      icon: mdi:tune
+      collapsed: true
+      input:
+        sweeping_mode_value:
+          name: "Mode Value: Sweep Only"
+          description: "Exact option value for sweep-only mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
+          selector:
+            text:
+          default: "sweeping"
+
+        sweeping_mopping_mode_value:
+          name: "Mode Value: Sweep + Mop"
+          description: "Exact option value for sweep and mop mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
+          selector:
+            text:
+          default: "sweeping_and_mopping"
+
+        cleaning_repeats:
+          name: "Cleaning Repeats"
+          description: "Number of cleaning passes per room/segment. Only used when segment service is enabled. Recommended: 1 for daily, 2 for normal, 3 for intensive cleaning."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+              unit_of_measurement: "passes"
+          default: 2
+
+        cleaning_states:
+          name: "Active Cleaning States"
+          description: "Comma-separated list of status values that count as active cleaning. Used to detect if robot is working (for pause logic). Only change if your robot reports different status values."
+          selector:
+            text:
+          default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
+
+        paused_state:
+          name: "Paused State"
+          description: "Status value indicating that the robot is paused. Used for resume logic in smart start/pause function."
+          selector:
+            text:
+          default: "paused"
+
+        moistening_status:
+          name: "Moistening Status (optional)"
+          description: "Status during mop pad moistening (e.g., moistening, wetting_mop). Used for sweep+mop on non-base maps: waits for this status before pausing for manual transport. Leave empty if unsure or not applicable."
+          selector:
+            text:
+          default: ""
+
+    # ========================================
+    # SECTION F: ADVANCED SETTINGS
+    # ========================================
+    advanced_settings:
+      name: "Advanced Settings"
+      description: "Advanced configuration: Segment service, timeouts, and debugging"
+      icon: mdi:cog
+      collapsed: true
+      input:
+        use_segment_service:
+          name: "Use Segment Service"
+          description: "Enable room/segment-based cleaning with configurable repeats (uses dreame_vacuum.vacuum_clean_segment). Disable if segments not found or robot doesn't support segment cleaning (falls back to vacuum.start)."
+          selector:
+            boolean:
+          default: true
+
+        start_timeout:
+          name: "Start Timeout"
+          description: "Maximum wait time (seconds) until robot reaches cleaning status. Required for map switching to wait before pausing for manual transport. Automation aborts on timeout."
+          selector:
+            number:
+              min: 30
+              max: 300
+              step: 10
+              unit_of_measurement: "s"
+              mode: slider
+          default: 120
+
+        moistening_timeout:
+          name: "Moistening Timeout"
+          description: "Maximum wait time (seconds) for moistening status. Only relevant if moistening status is configured. Automation continues on timeout (no abort)."
+          selector:
+            number:
+              min: 10
+              max: 180
+              step: 5
+              unit_of_measurement: "s"
+              mode: slider
+          default: 60
+
+        debug_mode:
+          name: "Debug Mode"
+          description: "Show persistent notification with debug information on every trigger. Displays function, status, map, segments, and variables. Use for troubleshooting, disable after successful setup."
+          selector:
+            boolean:
+          default: false
+
+# ========================================
+# TRIGGER CONFIGURATION
+# ========================================
+# Function-based trigger merging with conditional enabling
+# Each function merges its user-configured triggers
+triggers:
+  # ========================================
+  # FALLBACK TRIGGER (Required for blueprint validation)
+  # ========================================
+  # This trigger ensures the blueprint always has at least one valid trigger
+  # It will never actually fire in normal operation
+  # User must configure and enable at least one function for the automation to work
+  - trigger: event
+    event_type: "dreame_blueprint_setup_required"
+    id: "setup_required"
+
+  # ========================================
+  # FUNCTION 1: Sweep Only Mode
+  # ========================================
+  - triggers: !input sweep_trigger
+
+  # ========================================
+  # FUNCTION 2: Sweep + Mop Mode
+  # ========================================
+  - triggers: !input mop_trigger
+
+  # ========================================
+  # FUNCTION 3: Smart Start/Pause/Resume
+  # ========================================
+  - triggers: !input start_trigger
+
+  # ========================================
+  # FUNCTION 4: Map 1 Switch
+  # ========================================
+  - triggers: !input map1_trigger
+
+  # ========================================
+  # FUNCTION 5: Map 2 Switch
+  # ========================================
+  - triggers: !input map2_trigger
+
+  # ========================================
+  # FUNCTION 6: Map 3 Switch
+  # ========================================
+  - triggers: !input map3_trigger
+
+# ========================================
+# VARIABLEN
+# ========================================
+variables:
+  # Input Werte importieren - Roboter Entitäten
+  vacuum_entity: !input vacuum_entity
+
+  # ========================================
+  # AUTO-DETECTION: Extract base name from vacuum entity
+  # ========================================
+  # Pattern: vacuum.helene_wischer → helene_wischer
+  # Schema: [domain].[vacuum_name]_[entity_name]
+  vacuum_base_name: "{{ vacuum_entity.split('.')[1] }}"
+
+  # ========================================
+  # ACTIVE ENTITIES (Auto-Detected)
+  # ========================================
+  # These are the active entities used throughout the automation
+  status_sensor: "sensor.{{ vacuum_base_name }}_status"
+  cleaning_mode_select: "select.{{ vacuum_base_name }}_cleaning_mode"
+  selected_map_select: "select.{{ vacuum_base_name }}_selected_map"
+  map_camera: "camera.{{ vacuum_base_name }}_map"
+  self_clean_switch: "switch.{{ vacuum_base_name }}_self_clean"
+
+  # ========================================
+  # MAP CONFIGURATION (Fully Auto-Detected)
+  # ========================================
+  # Auto-detect all map names from map camera entities
+  # Format: camera.{robot}_map_1, _map_2, etc.
+  # Extracts: custom_name (if set) or map_name (default)
+
+  map_1_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_1' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 1
+    {% endif %}
+
+  map_2_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_2' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 2
+    {% endif %}
+
+  map_3_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_3' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 3
+    {% endif %}
+
+  map_4_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_4' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 4
+    {% endif %}
+
+  map_5_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_5' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 5
+    {% endif %}
+
+  map_6_name: >
+    {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_6' %}
+    {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) }}
+    {% else %}
+      Map 6
+    {% endif %}
+
+  # Auto-detect base station map by finding map with charger_position attribute
+  base_station_map: >
+    {% set ns = namespace(found='') %}
+    {% for i in range(1, 7) %}
+      {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_' ~ i %}
+      {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+        {% set charger_pos = state_attr(map_entity, 'charger_position') %}
+        {% if charger_pos is not none %}
+          {% set ns.found = state_attr(map_entity, 'custom_name') | default(state_attr(map_entity, 'map_name'), true) %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    {{ ns.found if ns.found != '' else 'Map 1' }}
+
+  # ========================================
+  # CLEANING SETTINGS
+  # ========================================
+  mode_sweeping: !input sweeping_mode_value
+  mode_sweeping_mopping: !input sweeping_mopping_mode_value
+  repeats: !input cleaning_repeats
+  cleaning_states_raw: !input cleaning_states
+  cleaning_states: "{{ cleaning_states_raw.split(',') }}"
+  paused_state: !input paused_state
+  moistening_status: !input moistening_status
+  start_timeout: !input start_timeout
+  moistening_timeout: !input moistening_timeout
+  use_segment_service: !input use_segment_service
+  debug_mode: !input debug_mode
+
+  # ========================================
+  # FUNCTION ROUTING (Hybrid: ID, Device Trigger, or MQTT Payload)
+  # ========================================
+  # Priority 1: User-set trigger.id
+  # Priority 2: Device Trigger subtype (Zigbee2MQTT device actions)
+  # Priority 3: MQTT payload fallback
+  # Result: "fn_sweep", "fn_mop", "fn_start", "fn_map1", "fn_map2", "fn_map3", or "unknown"
+  triggered_function: >
+    {% if trigger.id is defined and trigger.id != '' %}
+      {{ trigger.id }}
+    {% elif trigger.platform == 'device' and trigger.subtype is defined %}
+      {% set action = trigger.subtype %}
+      {% if action == '1_single' %}fn_sweep
+      {% elif action == '2_single' %}fn_mop
+      {% elif action == '3_single' %}fn_start
+      {% elif action == '4_single' %}fn_map1
+      {% elif action == '5_single' %}fn_map2
+      {% elif action == '6_single' %}fn_map3
+      {% else %}unknown{% endif %}
+    {% elif trigger.platform == 'mqtt' and trigger.payload_json is defined %}
+      {% set action = trigger.payload_json.action | default('') %}
+      {% if action == '1_single' %}fn_sweep
+      {% elif action == '2_single' %}fn_mop
+      {% elif action == '3_single' %}fn_start
+      {% elif action == '4_single' %}fn_map1
+      {% elif action == '5_single' %}fn_map2
+      {% elif action == '6_single' %}fn_map3
+      {% else %}unknown{% endif %}
+    {% else %}unknown{% endif %}
+
+  # ========================================
+  # ENTITY STATE CHECKS
+  # ========================================
+  current_status: "{{ states(status_sensor) }}"
+  current_mode: "{{ states(cleaning_mode_select) }}"
+  current_map_name: "{{ states(selected_map_select) }}"
+  current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
+
+  # Boolean Evaluations
+  is_base_station_map: "{{ current_map_name == base_station_map }}"
+  is_cleaning: "{{ current_status in cleaning_states }}"
+  is_paused: "{{ current_status == paused_state }}"
+
+  # Room/Segment Data Processing (Hybrid: supports both rooms and segments)
+  # Priority 1: rooms (extract room_id values)
+  # Priority 2: segments (extract segment_id or keys)
+  map_rooms_raw: "{{ state_attr(map_camera, 'rooms') }}"
+  map_segments_raw: "{{ state_attr(map_camera, 'segments') }}"
+
+  # Extract room_id values from rooms dict
+  room_ids: >
+    {% if map_rooms_raw is not none %}
+      {% set ns = namespace(ids=[]) %}
+      {% for key, room in map_rooms_raw.items() %}
+        {% if room.room_id is defined %}
+          {% set ns.ids = ns.ids + [room.room_id] %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.ids }}
+    {% else %}
+      []
+    {% endif %}
+
+  # Extract segment_id values from segments dict (fallback)
+  segment_ids: >
+    {% if map_segments_raw is not none %}
+      {% set ns = namespace(ids=[]) %}
+      {% for key, segment in map_segments_raw.items() %}
+        {% if segment.segment_id is defined %}
+          {% set ns.ids = ns.ids + [segment.segment_id] %}
+        {% else %}
+          {% set ns.ids = ns.ids + [key | int] %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.ids }}
+    {% else %}
+      []
+    {% endif %}
+
+  # Use rooms if available, otherwise use segments
+  map_segments: >
+    {% if room_ids | length > 0 %}
+      {{ room_ids }}
+    {% else %}
+      {{ segment_ids }}
+    {% endif %}
+
+  has_segments: "{{ map_segments | length > 0 }}"
+  segments_source: >
+    {% if room_ids | length > 0 %}rooms
+    {% elif segment_ids | length > 0 %}segments
+    {% else %}none{% endif %}
+
+# ========================================
+# ACTIONS
+# ========================================
+actions:
+  # ========================================
+  # Debug Notification (optional)
+  # ========================================
+  - if:
+      - condition: template
+        value_template: "{{ debug_mode }}"
+    then:
+      - action: persistent_notification.create
+        data:
+          title: "🔍 Debug: Function {{ triggered_function }}"
+          message: |
+            **Triggered Function:** {{ triggered_function }}
+            **Trigger Platform:** {{ trigger.platform }}
+            **Trigger ID:** {{ trigger.id | default('N/A') }}
+            {% if trigger.platform == 'device' %}
+            **Device Trigger Type:** {{ trigger.type | default('N/A') }}
+            **Device Trigger Subtype:** {{ trigger.subtype | default('N/A') }}
+            {% elif trigger.platform == 'mqtt' %}
+            **MQTT Topic:** {{ trigger.topic | default('N/A') }}
+            **MQTT Payload:** {{ trigger.payload_json | default('N/A') }}
+            {% elif trigger.platform == 'state' %}
+            **State Entity:** {{ trigger.entity_id | default('N/A') }}
+            **State To:** {{ trigger.to_state.state if trigger.to_state is defined else 'N/A' }}
+            {% endif %}
+
+            **Robot Status:** {{ current_status }}
+            **Current Map:** {{ current_map_name }} ({{ current_map_id }})
+            **Cleaning Mode:** {{ current_mode }}
+
+            **Auto-Detected Maps:**
+            • Map 1: {{ map_1_name }}
+            • Map 2: {{ map_2_name }}
+            • Map 3: {{ map_3_name }}
+            • Map 4: {{ map_4_name }}
+            • Map 5: {{ map_5_name }}
+            • Map 6: {{ map_6_name }}
+
+            **Base Station Map (Auto-Detected):** {{ base_station_map }}
+            **Is Current Map Base Station:** {{ is_base_station_map }}
+
+            **Is Cleaning:** {{ is_cleaning }}
+            **Is Paused:** {{ is_paused }}
+
+            **Rooms/Segments Available:** {{ has_segments }}
+            **Source:** {{ segments_source }}
+            **Room/Segment Count:** {{ map_segments | length }}
+            **Room/Segment IDs:** {{ map_segments }}
+
+  # ========================================
+  # MAIN LOGIC - Function Routing (by trigger.id)
+  # ========================================
+  - choose:
+      # ========================================
+      # SETUP REQUIRED HANDLER
+      # ========================================
+      # This handles the fallback trigger and shows setup instructions
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'setup_required' }}"
+        sequence:
+          - action: persistent_notification.create
+            data:
+              title: "⚠️ Dreame Vacuum Blueprint - Setup Required"
+              message: |
+                **No functions configured!**
+
+                Please configure your vacuum automation:
+
+                1. **Configure at least one function:**
+                   - Add triggers (State/MQTT/Event)
+                   - Enable the function toggle
+
+                2. **Available functions:**
+                   - 🧹 Sweep Only Mode
+                   - 💧 Sweep + Mop Mode
+                   - ▶️ Smart Start/Pause/Resume
+                   - 🗺️ Map 1 / Map 2 / Map 3
+
+                3. **Save your automation** after configuration
+
+                This message appears because the automation has no active triggers configured.
+
+      # ========================================
+      # FUNCTION 1: Sweep Only Mode (fn_sweep)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_sweep' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "✅ Cleaning Mode Changed"
+                  message: "Mode set to: **Sweep Only** ({{ mode_sweeping }})"
+
+      # ========================================
+      # FUNCTION 2: Sweep + Mop Mode (fn_mop)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_mop' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping_mopping }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "✅ Cleaning Mode Changed"
+                  message: "Mode set to: **Sweep + Mop** ({{ mode_sweeping_mopping }})"
+
+      # ========================================
+      # FUNCTION 3: Smart Start/Pause/Resume (fn_start)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_start' }}"
+        sequence:
+          - choose:
+              # Robot is cleaning → Pause
+              - conditions:
+                  - condition: template
+                    value_template: "{{ is_cleaning }}"
+                sequence:
+                  - action: vacuum.pause
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "⏸️ Robot Paused"
+                          message: "Previous status: {{ current_status }}"
+
+              # Robot is paused → Resume
+              - conditions:
+                  - condition: template
+                    value_template: "{{ is_paused }}"
+                sequence:
+                  - action: vacuum.start
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "▶️ Robot Resumed"
+                          message: "Cleaning continues"
+
+            # Default: Robot idle → Start Cleaning
+            default:
+              - choose:
+                  # On base station map → Start directly
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ is_base_station_map }}"
+                    sequence:
+                      - if:
+                          - condition: template
+                            value_template: "{{ use_segment_service and has_segments }}"
+                        then:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_segments }}"
+                              repeats: "{{ repeats }}"
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "🚀 Segment Cleaning Started"
+                                  message: |
+                                    Map: {{ current_map_name }}
+                                    Segments: {{ map_segments | length }}
+                                    Repeats: {{ repeats }}
+                        else:
+                          - action: vacuum.start
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "🚀 Cleaning Started"
+                                  message: |
+                                    Map: {{ current_map_name }}
+                                    Mode: Full cleaning
+
+                # On other map → Start and pause (for manual transport)
+                default:
+                  - if:
+                      - condition: template
+                        value_template: "{{ use_segment_service and has_segments }}"
+                    then:
+                      - action: dreame_vacuum.vacuum_clean_segment
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+                        data:
+                          segments: "{{ map_segments }}"
+                          repeats: "{{ repeats }}"
+                    else:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  # Wait for cleaning status
+                  - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+                    timeout:
+                      seconds: "{{ start_timeout }}"
+                    continue_on_timeout: false
+
+                  # Optional: Wait for moistening (for sweep+mop)
+                  - if:
+                      - condition: template
+                        value_template: "{{ current_mode == mode_sweeping_mopping and moistening_status != '' }}"
+                    then:
+                      - wait_template: "{{ states(status_sensor) == moistening_status }}"
+                        timeout:
+                          seconds: "{{ moistening_timeout }}"
+                        continue_on_timeout: true
+
+                  # Pause for manual transport
+                  - action: vacuum.pause
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "⏸️ Robot Paused for Transport"
+                          message: |
+                            Map: {{ current_map_name }}
+                            Please transport the robot to the target map.
+                            Press button again to resume.
+
+      # ========================================
+      # FUNCTION 4: Map 1 Switch (fn_map1)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_map1' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_1_name }}"
+
+          # Self-Clean Switch Logic (if available)
+          - if:
+              - condition: template
+                value_template: "{{ has_value(self_clean_switch) }}"
+            then:
+              - choose:
+                  # If Map 1 = base station → Switch ON
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ map_1_name == base_station_map }}"
+                    sequence:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "{{ self_clean_switch }}"
+                # Otherwise → Switch OFF
+                default:
+                  - action: switch.turn_off
+                    target:
+                      entity_id: "{{ self_clean_switch }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "🗺️ Map Changed"
+                  message: |
+                    New Map: **{{ map_1_name }}**
+                    {% if has_value(self_clean_switch) %}
+                    Self-Clean: {{ 'ON' if map_1_name == base_station_map else 'OFF' }}
+                    {% endif %}
+
+      # ========================================
+      # FUNCTION 5: Map 2 Switch (fn_map2)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_map2' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_2_name }}"
+
+          # Self-Clean Switch Logic (if available)
+          - if:
+              - condition: template
+                value_template: "{{ has_value(self_clean_switch) }}"
+            then:
+              - choose:
+                  # If Map 2 = base station → Switch ON
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ map_2_name == base_station_map }}"
+                    sequence:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "{{ self_clean_switch }}"
+                # Otherwise → Switch OFF
+                default:
+                  - action: switch.turn_off
+                    target:
+                      entity_id: "{{ self_clean_switch }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "🗺️ Map Changed"
+                  message: |
+                    New Map: **{{ map_2_name }}**
+                    {% if has_value(self_clean_switch) %}
+                    Self-Clean: {{ 'ON' if map_2_name == base_station_map else 'OFF' }}
+                    {% endif %}
+
+      # ========================================
+      # FUNCTION 6: Map 3 Switch (fn_map3)
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ triggered_function == 'fn_map3' }}"
+        sequence:
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_3_name }}"
+
+          # Self-Clean Switch Logic (if available)
+          - if:
+              - condition: template
+                value_template: "{{ has_value(self_clean_switch) }}"
+            then:
+              - choose:
+                  # If Map 3 = base station → Switch ON
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ map_3_name == base_station_map }}"
+                    sequence:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "{{ self_clean_switch }}"
+                # Otherwise → Switch OFF
+                default:
+                  - action: switch.turn_off
+                    target:
+                      entity_id: "{{ self_clean_switch }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "🗺️ Map Changed"
+                  message: |
+                    New Map: **{{ map_3_name }}**
+                    {% if has_value(self_clean_switch) %}
+                    Self-Clean: {{ 'ON' if map_3_name == base_station_map else 'OFF' }}
+                    {% endif %}
+
+    # Default: Unknown trigger ID (should not happen)
+    default:
+      - if:
+          - condition: template
+            value_template: "{{ debug_mode }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: "⚠️ Unknown Trigger ID"
+              message: |
+                **Triggered Function:** {{ triggered_function }}
+                **Trigger Platform:** {{ trigger.platform }}
+                **Trigger Entity:** {{ trigger.entity_id | default('N/A') }}
+
+                This trigger ID is not configured. Please check your function trigger configurations.
+
+# ========================================
+# AUTOMATION MODE
+# ========================================
+mode: queued
+max: 10
+max_exceeded: silent
