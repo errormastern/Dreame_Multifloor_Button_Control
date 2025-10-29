@@ -1,7 +1,7 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.5 (Alpha)**
+    **Version: 0.2.7 (Alpha)**
 
 
     Multi-floor control for Dreame vacuum cleaners via button triggers.
@@ -547,9 +547,6 @@ actions:
             • Map 1: {{ map_1_name }}
             • Map 2: {{ map_2_name }}
             • Map 3: {{ map_3_name }}
-            • Map 4: {{ map_4_name }}
-            • Map 5: {{ map_5_name }}
-            • Map 6: {{ map_6_name }}
 
             **Base Station Map (Auto-Detected):** {{ base_station_map }}
             **Is Current Map Base Station:** {{ is_base_station_map }}
@@ -692,6 +689,24 @@ actions:
                       - condition: template
                         value_template: "{{ is_base_station_map }}"
                     sequence:
+                      # Ensure self_clean is ON for base station cleaning
+                      - if:
+                          - condition: template
+                            value_template: "{{ has_value(self_clean_switch) }}"
+                        then:
+                          - action: switch.turn_on
+                            target:
+                              entity_id: "{{ self_clean_switch }}"
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "🔧 Self-Clean Enabled"
+                                  message: "Self-clean enabled - robot can return to station during cleaning."
+
                       - if:
                           - condition: template
                             value_template: "{{ use_segment_service and has_segments }}"
@@ -732,6 +747,24 @@ actions:
 
                 # On other map → Start and pause (for manual transport)
                 default:
+                  # Enable self_clean for station preparation
+                  - if:
+                      - condition: template
+                        value_template: "{{ has_value(self_clean_switch) }}"
+                    then:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "{{ self_clean_switch }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "🔧 Self-Clean Enabled"
+                              message: "Preparing robot at station (moistening mops, filling water tank)..."
+
                   - if:
                       - condition: template
                         value_template: "{{ use_segment_service and has_segments }}"
@@ -768,6 +801,24 @@ actions:
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
+                  # Disable self_clean after pause (robot should not return to station)
+                  - if:
+                      - condition: template
+                        value_template: "{{ has_value(self_clean_switch) }}"
+                    then:
+                      - action: switch.turn_off
+                        target:
+                          entity_id: "{{ self_clean_switch }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "🔧 Self-Clean Disabled"
+                              message: "Self-clean disabled - robot will not return to station during cleaning."
+
                   - if:
                       - condition: template
                         value_template: "{{ debug_mode }}"
@@ -793,26 +844,6 @@ actions:
             data:
               option: "{{ map_1_name }}"
 
-          # Self-Clean Switch Logic (if available)
-          - if:
-              - condition: template
-                value_template: "{{ has_value(self_clean_switch) }}"
-            then:
-              - choose:
-                  # If Map 1 = base station → Switch ON
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ map_1_name == base_station_map }}"
-                    sequence:
-                      - action: switch.turn_on
-                        target:
-                          entity_id: "{{ self_clean_switch }}"
-                # Otherwise → Switch OFF
-                default:
-                  - action: switch.turn_off
-                    target:
-                      entity_id: "{{ self_clean_switch }}"
-
           - if:
               - condition: template
                 value_template: "{{ debug_mode }}"
@@ -820,11 +851,7 @@ actions:
               - action: persistent_notification.create
                 data:
                   title: "🗺️ Map Changed"
-                  message: |
-                    New Map: **{{ map_1_name }}**
-                    {% if has_value(self_clean_switch) %}
-                    Self-Clean: {{ 'ON' if map_1_name == base_station_map else 'OFF' }}
-                    {% endif %}
+                  message: "New Map: **{{ map_1_name }}**"
 
       # ========================================
       # FUNCTION 5: Map 2 Switch (fn_map2)
@@ -839,26 +866,6 @@ actions:
             data:
               option: "{{ map_2_name }}"
 
-          # Self-Clean Switch Logic (if available)
-          - if:
-              - condition: template
-                value_template: "{{ has_value(self_clean_switch) }}"
-            then:
-              - choose:
-                  # If Map 2 = base station → Switch ON
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ map_2_name == base_station_map }}"
-                    sequence:
-                      - action: switch.turn_on
-                        target:
-                          entity_id: "{{ self_clean_switch }}"
-                # Otherwise → Switch OFF
-                default:
-                  - action: switch.turn_off
-                    target:
-                      entity_id: "{{ self_clean_switch }}"
-
           - if:
               - condition: template
                 value_template: "{{ debug_mode }}"
@@ -866,11 +873,7 @@ actions:
               - action: persistent_notification.create
                 data:
                   title: "🗺️ Map Changed"
-                  message: |
-                    New Map: **{{ map_2_name }}**
-                    {% if has_value(self_clean_switch) %}
-                    Self-Clean: {{ 'ON' if map_2_name == base_station_map else 'OFF' }}
-                    {% endif %}
+                  message: "New Map: **{{ map_2_name }}**"
 
       # ========================================
       # FUNCTION 6: Map 3 Switch (fn_map3)
@@ -885,26 +888,6 @@ actions:
             data:
               option: "{{ map_3_name }}"
 
-          # Self-Clean Switch Logic (if available)
-          - if:
-              - condition: template
-                value_template: "{{ has_value(self_clean_switch) }}"
-            then:
-              - choose:
-                  # If Map 3 = base station → Switch ON
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ map_3_name == base_station_map }}"
-                    sequence:
-                      - action: switch.turn_on
-                        target:
-                          entity_id: "{{ self_clean_switch }}"
-                # Otherwise → Switch OFF
-                default:
-                  - action: switch.turn_off
-                    target:
-                      entity_id: "{{ self_clean_switch }}"
-
           - if:
               - condition: template
                 value_template: "{{ debug_mode }}"
@@ -912,11 +895,7 @@ actions:
               - action: persistent_notification.create
                 data:
                   title: "🗺️ Map Changed"
-                  message: |
-                    New Map: **{{ map_3_name }}**
-                    {% if has_value(self_clean_switch) %}
-                    Self-Clean: {{ 'ON' if map_3_name == base_station_map else 'OFF' }}
-                    {% endif %}
+                  message: "New Map: **{{ map_3_name }}**"
 
     # Default: Unknown trigger ID (should not happen)
     default:

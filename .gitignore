@@ -1,0 +1,56 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# Local reference files (not for public repo)
+input/
+examples/
+project.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+
+# Local documentation (work in progress, not for public repo)
+CHANGELOG_*.md
+PROJECT_PLAN.md
+TEST_STRATEGY.md
+DEVELOPMENT_NOTES.md
+PHASE*.md
+IMPLEMENTATION_SUMMARY.md
+FIX_SUMMARY.md
+FINAL_VALIDATION.md
+VALIDATION_REPORT.md
+BREAKING_CHANGES.md
