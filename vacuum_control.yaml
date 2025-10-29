@@ -1,7 +1,7 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.5**
+    **Version: 0.2.6**
 
 
     Professional multi-floor control for Dreame vacuum cleaners with intelligent automation.
@@ -165,8 +165,36 @@ blueprint:
     # ========================================
     cleaning_settings:
       name: "Cleaning Settings"
-      description: "Configure cleaning modes, states, and repeat counts"
+      description: "Configure cleaning behavior and segment service"
       icon: mdi:tune
+      collapsed: true
+      input:
+        cleaning_repeats:
+          name: "Cleaning Repeats"
+          description: "Number of cleaning passes per room/segment. Only used when segment service is enabled. Recommended: 1 for daily, 2 for normal, 3 for intensive cleaning."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+              unit_of_measurement: "passes"
+          default: 2
+
+        use_segment_service:
+          name: "Use Segment Service"
+          description: "Enable room/segment-based cleaning with configurable repeats (uses dreame_vacuum.vacuum_clean_segment). Disable if segments not found or robot doesn't support segment cleaning (falls back to vacuum.start)."
+          selector:
+            boolean:
+          default: true
+
+    # ========================================
+    # SECTION F: ADVANCED SETTINGS
+    # ========================================
+    advanced_settings:
+      name: "Advanced Settings"
+      description: "Advanced configuration: Mode values, status states, timeouts, and debugging"
+      icon: mdi:cog
       collapsed: true
       input:
         sweeping_mode_value:
@@ -182,18 +210,6 @@ blueprint:
           selector:
             text:
           default: "sweeping_and_mopping"
-
-        cleaning_repeats:
-          name: "Cleaning Repeats"
-          description: "Number of cleaning passes per room/segment. Only used when segment service is enabled. Recommended: 1 for daily, 2 for normal, 3 for intensive cleaning."
-          selector:
-            number:
-              min: 1
-              max: 3
-              step: 1
-              mode: slider
-              unit_of_measurement: "passes"
-          default: 2
 
         cleaning_states:
           name: "Active Cleaning States"
@@ -215,22 +231,6 @@ blueprint:
           selector:
             text:
           default: ""
-
-    # ========================================
-    # SECTION F: ADVANCED SETTINGS
-    # ========================================
-    advanced_settings:
-      name: "Advanced Settings"
-      description: "Advanced configuration: Segment service, timeouts, and debugging"
-      icon: mdi:cog
-      collapsed: true
-      input:
-        use_segment_service:
-          name: "Use Segment Service"
-          description: "Enable room/segment-based cleaning with configurable repeats (uses dreame_vacuum.vacuum_clean_segment). Disable if segments not found or robot doesn't support segment cleaning (falls back to vacuum.start)."
-          selector:
-            boolean:
-          default: true
 
         start_timeout:
           name: "Start Timeout"
