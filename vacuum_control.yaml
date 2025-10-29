@@ -1,43 +1,43 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.6**
+    **Version: 0.2.5 (Alpha)**
 
 
-    Professional multi-floor control for Dreame vacuum cleaners with intelligent automation.
+    Multi-floor control for Dreame vacuum cleaners via button triggers.
 
 
-    **Key Features:**
+    **Features:**
 
-    • Zero configuration - Only select robot entity, everything else auto-detected
+    • Zero configuration - Select vacuum entity, all else auto-detected
 
-    • Flexible trigger system - MQTT, Device, State, or Event triggers per function
+    • Flexible triggers - MQTT, Device, State, or Event per function
 
-    • Intelligent start/pause/resume based on robot status and current map
+    • Intelligent start/pause/resume with base station detection
 
-    • Automatic base station detection - No pause needed when starting on home map
+    • Room/segment cleaning with configurable repeat counts
 
-    • Room/segment cleaning support with configurable repeat counts
+    • Self-clean automation based on current map
 
-    • Self-clean switch automation based on current map
+    • Map switching (up to 3 maps)
 
 
-    **Available Functions:**
+    **Functions:**
 
     • Mode switching (sweep only / sweep + mop)
 
     • Smart start/pause/resume
 
-    • Map switching (up to 3 maps)
+    • Map switching (Map 1, Map 2, Map 3)
 
 
     **Requirements:**
 
     • Home Assistant ≥ 2024.10.0
 
-    • Dreame Vacuum Integration (v2.0.0b19+)
+    • Dreame Vacuum Integration ≥ v2.0.0b19
 
-    • At least one saved map configured in robot
+    • At least one saved map configured
 
 
     📖 [Documentation](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
@@ -75,7 +75,7 @@ blueprint:
       input:
         sweep_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_sweep` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_sweep` in advanced options."
           selector:
             trigger:
           default: []
@@ -91,7 +91,7 @@ blueprint:
       input:
         mop_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_mop` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_mop` in advanced options."
           selector:
             trigger:
           default: []
@@ -107,7 +107,7 @@ blueprint:
       input:
         start_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_start` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_start` in advanced options."
           selector:
             trigger:
           default: []
@@ -123,7 +123,7 @@ blueprint:
       input:
         map1_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map1` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map1` in advanced options."
           selector:
             trigger:
           default: []
@@ -139,7 +139,7 @@ blueprint:
       input:
         map2_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map2` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map2` in advanced options."
           selector:
             trigger:
           default: []
@@ -155,7 +155,7 @@ blueprint:
       input:
         map3_trigger:
           name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. Set Trigger ID to `fn_map3` in advanced options for manual routing."
+          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map3` in advanced options."
           selector:
             trigger:
           default: []

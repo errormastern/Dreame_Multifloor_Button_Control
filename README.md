@@ -5,16 +5,16 @@
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
 
-Home Assistant Blueprint for controlling Dreame vacuum cleaners across multiple floors via button triggers (MQTT, Device, State, or Event)
+Multi-floor control for Dreame vacuum cleaners via button triggers (MQTT, Device, State, or Event)
 
 ## Features
 
-- **Zero Configuration**: Select vacuum entity, all related entities auto-detected
-- **Flexible Triggers**: MQTT, Device, State, or Event triggers per function
-- **Multi-Floor Control**: Switch between up to 3 maps with automatic base station detection
-- **Intelligent Start/Pause**: Base station map starts immediately, other maps pause for manual transport
-- **Segment Cleaning**: Room/segment-based cleaning with configurable repeat counts
-- **Self-Clean Automation**: Automatically enables/disables based on current map
+- **Zero Configuration**: Select vacuum entity, all else auto-detected
+- **Flexible Triggers**: MQTT, Device, State, or Event per function
+- **Intelligent Start/Pause**: Base station detection and adaptive behavior
+- **Room/Segment Cleaning**: Configurable repeat counts
+- **Self-Clean Automation**: Automatically enabled/disabled based on current map
+- **Map Switching**: Up to 3 maps
 - **Debug Mode**: Persistent notifications for troubleshooting
 
 ## Requirements
@@ -84,7 +84,7 @@ trigger: state
 entity_id: input_button.sweep_only
 ```
 
-**Note:** For MQTT/Device triggers using default action values (`1_single`, `2_single`, etc.), the Trigger ID is auto-detected. For State/Event triggers, manually set Trigger ID in trigger advanced options.
+**⚠️ Important:** MQTT/Device triggers auto-detect action values (`1_single`, `2_single`, etc.). For State/Event triggers, manually set Trigger ID in trigger advanced options (e.g., `fn_sweep`, `fn_mop`, `fn_start`, `fn_map1`, `fn_map2`, `fn_map3`).
 
 ## Functions
 
@@ -114,11 +114,11 @@ Adaptive behavior based on robot status:
 
 ### Map Switching
 
-Switches to selected map (1-3) and adjusts self-clean switch:
+Switches to selected map and adjusts self-clean switch:
 - **Base station map**: Self-clean ON (returns to base after cleaning)
 - **Other maps**: Self-clean OFF (manual transport required)
 
-Maps are auto-detected from `camera.{robot}_map_1`, `_map_2`, `_map_3` entities. Custom map names are used if configured.
+Supports up to 3 maps (Map 1, Map 2, Map 3). Maps are auto-detected from `camera.{robot}_map_1`, `_map_2`, `_map_3` entities. Custom map names are used if configured.
 
 ## Advanced Settings
 
