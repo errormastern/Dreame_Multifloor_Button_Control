@@ -68,7 +68,7 @@ blueprint:
     # FUNCTION: SWEEP ONLY MODE
     # ========================================
     function_sweep_only:
-      name: "Function: Sweep Only Mode"
+      name: "Sweep Only Mode"
       description: "Set vacuum to sweep-only mode (no mopping). Activates when triggers are configured."
       icon: mdi:vacuum
       collapsed: true
@@ -84,7 +84,7 @@ blueprint:
     # FUNCTION: SWEEP + MOP MODE
     # ========================================
     function_sweep_mop:
-      name: "Function: Sweep + Mop Mode"
+      name: "Sweep + Mop Mode"
       description: "Set vacuum to sweep + mop mode (full cleaning). Activates when triggers are configured."
       icon: mdi:water
       collapsed: true
@@ -100,7 +100,7 @@ blueprint:
     # FUNCTION: SMART START/PAUSE/RESUME
     # ========================================
     function_smart_start:
-      name: "Function: Smart Start/Pause/Resume"
+      name: "Smart Start/Pause/Resume"
       description: "Intelligent control: Start when idle, pause when cleaning, resume when paused. Activates when triggers are configured."
       icon: mdi:play-pause
       collapsed: true
@@ -116,7 +116,7 @@ blueprint:
     # FUNCTION: MAP 1 SWITCH
     # ========================================
     function_map_1:
-      name: "Function: Map 1 Switch"
+      name: "Map 1 Switch"
       description: "Switch to Map 1 (auto-detected). Activates when triggers are configured."
       icon: mdi:home-floor-1
       collapsed: true
@@ -132,7 +132,7 @@ blueprint:
     # FUNCTION: MAP 2 SWITCH
     # ========================================
     function_map_2:
-      name: "Function: Map 2 Switch"
+      name: "Map 2 Switch"
       description: "Switch to Map 2 (auto-detected). Activates when triggers are configured."
       icon: mdi:home-floor-2
       collapsed: true
@@ -148,7 +148,7 @@ blueprint:
     # FUNCTION: MAP 3 SWITCH
     # ========================================
     function_map_3:
-      name: "Function: Map 3 Switch"
+      name: "Map 3 Switch"
       description: "Switch to Map 3 (auto-detected). Activates when triggers are configured."
       icon: mdi:home-floor-3
       collapsed: true
