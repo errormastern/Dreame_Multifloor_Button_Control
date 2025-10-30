@@ -40,11 +40,11 @@ blueprint:
     • At least one saved map configured
 
 
-    📖 [Documentation](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
+    📖 [Documentation](https://github.com/errormastern/dreame-multifloor-control)
   domain: automation
   homeassistant:
     min_version: 2024.10.0
-  source_url: https://github.com/errormastern/Dreame_Multifloor_Button_Control/blob/main/vacuum_control.yaml
+  source_url: https://github.com/errormastern/dreame-multifloor-control/blob/main/vacuum_control.yaml
   input:
     # ========================================
     # ROBOT CONFIGURATION
