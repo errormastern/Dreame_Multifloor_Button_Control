@@ -1,6 +1,6 @@
 # Dreame Vacuum Multi-Floor Button Control
 
-[![Version](https://img.shields.io/badge/version-0.2.5-blue.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control/releases)
+[![Version](https://img.shields.io/badge/version-0.2.8-blue.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
@@ -12,6 +12,7 @@ Multi-floor control for Dreame vacuum cleaners via button triggers (MQTT, Device
 - **Zero Configuration**: Select vacuum entity, all else auto-detected
 - **Flexible Triggers**: MQTT, Device, State, or Event per function
 - **Intelligent Start/Pause**: Base station detection and adaptive behavior
+- **Smart Undocking**: Configurable delay after leaving station for easier robot pickup
 - **Room/Segment Cleaning**: Configurable repeat counts
 - **Self-Clean Automation**: Automatically enabled/disabled based on current map
 - **Map Switching**: Up to 3 maps
@@ -112,6 +113,59 @@ Adaptive behavior based on robot status:
 - **Base station map**: Starts cleaning immediately
 - **Other maps**: Starts cleaning, waits for cleaning status, then pauses for manual transport
 
+#### Flow Diagram
+
+```mermaid
+flowchart TD
+    Start([▶️ Button Press: Smart Start]) --> GetStatus{Current<br/>Robot Status?}
+
+    GetStatus -->|Cleaning| PauseAction[⏸️ Pause Robot]
+    GetStatus -->|Paused| ResumeAction[▶️ Resume Robot]
+    GetStatus -->|Idle| CheckMap{Current Map =<br/>Base Station Map?}
+
+    PauseAction --> DebugPause{Debug?}
+    ResumeAction --> DebugResume{Debug?}
+
+    DebugPause -->|Yes| NotifyPause[📢 Robot Paused]
+    DebugPause -->|No| EndPause([✅ Complete])
+    DebugResume -->|Yes| NotifyResume[📢 Robot Resumed]
+    DebugResume -->|No| EndResume([✅ Complete])
+
+    NotifyPause --> EndPause
+    NotifyResume --> EndResume
+
+    CheckMap -->|Yes| StartBase[🏠 Start Cleaning on Base Map<br/>Self-Clean: ON]
+    CheckMap -->|No| StartOther[🗺️ Start Cleaning on Other Map<br/>Self-Clean: OFF]
+
+    StartBase --> EndBase([✅ Complete])
+    StartOther --> WaitCleaning[⏳ Wait for Cleaning Status<br/>Timeout: 120s]
+
+    WaitCleaning --> CheckMoisteningNeeded{Sweep+Mop<br/>Mode?}
+    CheckMoisteningNeeded -->|Yes| WaitMoistening[💧 Wait for Moistening<br/>Timeout: 60s]
+    CheckMoisteningNeeded -->|No| CheckUndocking
+
+    WaitMoistening --> CheckUndocking{Charging State<br/>Sensor Available?}
+
+    CheckUndocking -->|Yes| WaitUndock[🚪 Wait Until Robot Leaves Station<br/>Timeout: 30s]
+    CheckUndocking -->|No| PauseTransport
+
+    WaitUndock --> CheckDelay{Pause Delay<br/>> 0s?}
+    CheckDelay -->|Yes| DelayAction[⏱️ Delay: 0.0-5.0s<br/>Default: 2.0s]
+    CheckDelay -->|No| PauseTransport
+
+    DelayAction --> PauseTransport[⏸️ Pause for Manual Transport]
+    PauseTransport --> DisableSelfClean[🔧 Disable Self-Clean]
+    DisableSelfClean --> EndTransport([✅ Ready for Transport])
+
+    style Start fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    style PauseAction fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style ResumeAction fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    style StartBase fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
+    style StartOther fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
+    style PauseTransport fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style EndTransport fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+```
+
 ### Map Switching
 
 Switches to selected map and adjusts self-clean switch:
@@ -121,6 +175,22 @@ Switches to selected map and adjusts self-clean switch:
 Supports up to 3 maps (Map 1, Map 2, Map 3). Maps are auto-detected from `camera.{robot}_map_1`, `_map_2`, `_map_3` entities. Custom map names are used if configured.
 
 ## Advanced Settings
+
+### Pause & Transport
+
+**Pause Delay After Undocking** (0.0-5.0s, default: 2.0s): Time to wait after robot leaves charging station before pausing for manual transport.
+
+- **0.0s**: Immediate pause (robot may still be at station contacts)
+- **2.0-3.0s**: Recommended for easier pickup (~10cm away from station)
+- **5.0s**: Maximum delay (robot moves further from station)
+
+This setting only applies when starting cleaning on non-base station maps. The robot will:
+1. Start cleaning and moisten mops (if applicable)
+2. Leave the charging station
+3. Wait the configured delay time
+4. Pause for manual transport
+
+**Auto-Detection**: The blueprint automatically detects the `binary_sensor.{robot}_charging_state` entity. If not available, the robot pauses immediately after moistening.
 
 ### Segment Service
 
@@ -177,7 +247,7 @@ Processes button presses sequentially without cancellation. Required for Zigbee2
 
 ## Status
 
-This blueprint is in **alpha testing** (v0.2.5). Core functionality is implemented and tested with Dreame X10+. Feedback and bug reports welcome via GitHub Issues.
+This blueprint is in **alpha testing** (v0.2.8). Core functionality is implemented and tested with Dreame X10+. Feedback and bug reports welcome via GitHub Issues.
 
 ## Links
 

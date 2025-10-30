@@ -1,7 +1,7 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.7 (Alpha)**
+    **Version: 0.2.8 (Alpha)**
 
 
     Multi-floor control for Dreame vacuum cleaners via button triggers.
@@ -197,34 +197,9 @@ blueprint:
       icon: mdi:cog
       collapsed: true
       input:
-        sweeping_mode_value:
-          name: "Mode Value: Sweep Only"
-          description: "Exact option value for sweep-only mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
-          selector:
-            text:
-          default: "sweeping"
-
-        sweeping_mopping_mode_value:
-          name: "Mode Value: Sweep + Mop"
-          description: "Exact option value for sweep and mop mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
-          selector:
-            text:
-          default: "sweeping_and_mopping"
-
-        cleaning_states:
-          name: "Active Cleaning States"
-          description: "Comma-separated list of status values that count as active cleaning. Used to detect if robot is working (for pause logic). Only change if your robot reports different status values."
-          selector:
-            text:
-          default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
-
-        paused_state:
-          name: "Paused State"
-          description: "Status value indicating that the robot is paused. Used for resume logic in smart start/pause function."
-          selector:
-            text:
-          default: "paused"
-
+        # ============================================
+        # CLEANING BEHAVIOR
+        # ============================================
         moistening_status:
           name: "Moistening Status (optional)"
           description: "Status during mop pad moistening (e.g., moistening, wetting_mop). Used for sweep+mop on non-base maps: waits for this status before pausing for manual transport. Leave empty if unsure or not applicable."
@@ -232,6 +207,24 @@ blueprint:
             text:
           default: ""
 
+        # ============================================
+        # PAUSE & TRANSPORT
+        # ============================================
+        pause_delay_after_undock:
+          name: "Pause Delay After Undocking"
+          description: "Time (seconds) to wait after robot leaves charging station before pausing for manual transport. Allows robot to move slightly away from station for easier pickup. Set to 0 for immediate pause, 2-3s recommended for easier access. Only applies to non-base station maps."
+          selector:
+            number:
+              min: 0.0
+              max: 5.0
+              step: 0.1
+              unit_of_measurement: "s"
+              mode: slider
+          default: 2.0
+
+        # ============================================
+        # TIMEOUTS
+        # ============================================
         start_timeout:
           name: "Start Timeout"
           description: "Maximum wait time (seconds) until robot reaches cleaning status. Required for map switching to wait before pausing for manual transport. Automation aborts on timeout."
@@ -256,6 +249,43 @@ blueprint:
               mode: slider
           default: 60
 
+        # ============================================
+        # MODE VALUES
+        # ============================================
+        sweeping_mode_value:
+          name: "Mode Value: Sweep Only"
+          description: "Exact option value for sweep-only mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
+          selector:
+            text:
+          default: "sweeping"
+
+        sweeping_mopping_mode_value:
+          name: "Mode Value: Sweep + Mop"
+          description: "Exact option value for sweep and mop mode in the Cleaning Mode select entity. Case-sensitive. Check Developer Tools → States for available options."
+          selector:
+            text:
+          default: "sweeping_and_mopping"
+
+        # ============================================
+        # STATUS DETECTION
+        # ============================================
+        cleaning_states:
+          name: "Active Cleaning States"
+          description: "Comma-separated list of status values that count as active cleaning. Used to detect if robot is working (for pause logic). Only change if your robot reports different status values."
+          selector:
+            text:
+          default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
+
+        paused_state:
+          name: "Paused State"
+          description: "Status value indicating that the robot is paused. Used for resume logic in smart start/pause function."
+          selector:
+            text:
+          default: "paused"
+
+        # ============================================
+        # DEBUG & NOTIFICATIONS
+        # ============================================
         debug_mode:
           name: "Debug Mode"
           description: "Show persistent notification with debug information on every trigger. Displays function, status, map, segments, and variables. Use for troubleshooting, disable after successful setup."
@@ -332,6 +362,7 @@ variables:
   selected_map_select: "select.{{ vacuum_base_name }}_selected_map"
   map_camera: "camera.{{ vacuum_base_name }}_map"
   self_clean_switch: "switch.{{ vacuum_base_name }}_self_clean"
+  charging_state_sensor: "binary_sensor.{{ vacuum_base_name }}_charging_state"
 
   # ========================================
   # MAP CONFIGURATION (Fully Auto-Detected)
@@ -412,6 +443,7 @@ variables:
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
   paused_state: !input paused_state
   moistening_status: !input moistening_status
+  pause_delay_after_undock: !input pause_delay_after_undock
   start_timeout: !input start_timeout
   moistening_timeout: !input moistening_timeout
   use_segment_service: !input use_segment_service
@@ -795,6 +827,42 @@ actions:
                         timeout:
                           seconds: "{{ moistening_timeout }}"
                         continue_on_timeout: true
+
+                  # Wait until robot has left charging station
+                  - if:
+                      - condition: template
+                        value_template: "{{ has_value(charging_state_sensor) }}"
+                    then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏳ Waiting for Undocking"
+                              message: "Waiting for robot to leave charging station..."
+
+                      - wait_template: "{{ is_state(charging_state_sensor, 'off') }}"
+                        timeout:
+                          seconds: 30
+                        continue_on_timeout: true
+
+                  # Optional delay after undocking for easier pickup
+                  - if:
+                      - condition: template
+                        value_template: "{{ pause_delay_after_undock > 0 }}"
+                    then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏱️ Post-Undock Delay"
+                              message: "Waiting {{ pause_delay_after_undock }}s for robot to move away from station..."
+
+                      - delay:
+                          seconds: "{{ pause_delay_after_undock }}"
 
                   # Pause for manual transport
                   - action: vacuum.pause
