@@ -1,267 +1,237 @@
-# Dreame Vacuum Multi-Floor Button Control
+# Dreame Vacuum - Multifloor Control
 
-[![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control/releases)
+[![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
+[![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
 
-Multi-floor control for Dreame vacuum cleaners via button triggers (MQTT, Device, State, or Event)
+> **The Problem**: Cleaning floors without a base station via Xiaomi Home App requires multiple tedious manual steps: switching maps, enabling self-clean for mop moistening and tank filling, starting cleaning, waiting for the robot to leave the station, pausing, transporting the robot upstairs, disabling self-clean, resuming...
+>
+> **The Solution**: This blueprint automates the entire preparation workflow. One trigger starts the robot, runs the preparation program (mop moistening, tank filling), moves it to the transport waiting position, and pauses ready for pickup. Simple automation for everyday use.
 
 ## Features
 
-- **Zero Configuration**: Select vacuum entity, all else auto-detected
-- **Flexible Triggers**: MQTT, Device, State, or Event per function
-- **Intelligent Start/Pause**: Base station detection and adaptive behavior
-- **Smart Undocking**: Configurable delay after leaving station for easier robot pickup
-- **Room/Segment Cleaning**: Configurable repeat counts
-- **Self-Clean Automation**: Automatically enabled/disabled based on current map and mode (with state checks to avoid unnecessary commands)
-- **Map Switching**: Up to 3 maps
-- **Debug Mode**: Persistent notifications with timing measurements and timeout detection
+- **Zero configuration** - Select vacuum entity, everything else auto-detected
+- **Flexible triggers** - Any Home Assistant trigger (buttons, schedules, presence, etc.)
+- **Intelligent preparation workflow** - Automatic mop moistening and tank filling for non-base station maps
+- **Smart undocking** - Configurable delay for optimal transport position
+- **Mode & map switching** - Sweep-only vs. sweep+mop, up to 3 maps
+- **Segment cleaning** - Room-based cleaning with configurable repeats
+- **Debug mode** - Timing measurements and step-by-step execution tracking
 
 ## Requirements
 
 - Home Assistant ≥ 2024.10.0
 - [Dreame Vacuum Integration](https://github.com/Tasshack/dreame-vacuum) ≥ v2.0.0b19
 - At least one saved map configured in robot
-- Button device (optional: Zigbee2MQTT switch or any Home Assistant trigger)
 
 ## Installation
 
-### Via Import Button
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/errormastern/dreame-multifloor-control/raw/main/vacuum_control.yaml)
 
-[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/errormastern/Dreame_Multifloor_Button_Control/raw/main/vacuum_control.yaml)
+Or manually: **Settings** → **Automations & Scenes** → **Blueprints** → **Import Blueprint** → Paste URL above
 
-### Manual Import
-
-1. Navigate to **Settings** → **Automations & Scenes** → **Blueprints**
-2. Click **Import Blueprint**
-3. Enter URL: `https://github.com/errormastern/Dreame_Multifloor_Button_Control/raw/main/vacuum_control.yaml`
-4. Click **Preview** → **Import**
-
-## Configuration
-
-### Basic Setup
+## Quick Start
 
 1. Create automation from blueprint
 2. Select your vacuum entity (e.g., `vacuum.dreame_x10`)
-3. Configure triggers for desired functions (see below)
-4. Save automation
+3. Add triggers for functions you need (see table below)
+4. Save and test
 
-All entities (status, mode, map, camera) are automatically detected from the vacuum entity.
+All related entities (status, mode, map, camera) are auto-detected.
 
-### Function Triggers
+## Functions & Triggers
 
-Configure triggers for each function you want to use:
+Each function can use any Home Assistant trigger. For **MQTT/Device triggers** (e.g., Zigbee2MQTT buttons), action values are auto-detected. For **State/Event triggers**, set the Trigger ID manually in advanced options.
 
-| Function | Trigger ID | Default MQTT/Device Action | Description |
-|----------|------------|----------------------------|-------------|
-| Sweep Only | `fn_sweep` | `1_single` | Set cleaning mode to sweep only |
-| Sweep + Mop | `fn_mop` | `2_single` | Set cleaning mode to sweep and mop |
-| Start/Pause/Resume | `fn_start` | `3_single` | Smart start/pause/resume logic |
-| Map 1 Switch | `fn_map1` | `4_single` | Switch to Map 1 |
-| Map 2 Switch | `fn_map2` | `5_single` | Switch to Map 2 |
-| Map 3 Switch | `fn_map3` | `6_single` | Switch to Map 3 |
+| Function | Trigger ID | Description |
+|----------|------------|-------------|
+| Sweep Only Mode | `fn_sweep` | Set cleaning mode to sweep-only |
+| Sweep + Mop Mode | `fn_mop` | Set cleaning mode to sweep and mop |
+| Smart Start/Pause/Resume | `fn_start` | Intelligent workflow based on robot status |
+| Map 1 / Map 2 / Map 3 | `fn_map1` / `fn_map2` / `fn_map3` | Switch to selected map |
 
-#### Trigger Examples
+### Trigger Examples
 
-**MQTT Trigger** (Zigbee2MQTT button):
 ```yaml
+# Physical button (e.g., Zigbee2MQTT)
 trigger: mqtt
 topic: zigbee2mqtt/vacuum_button
-payload: '{"action": "1_single"}'
-```
 
-**Device Trigger** (Zigbee2MQTT device):
-```yaml
-trigger: device
-device_id: your_device_id
-type: action
-subtype: 1_single
-```
+# Schedule (start cleaning every morning)
+trigger: time
+at: "08:00:00"
 
-**State Trigger** (any entity):
-```yaml
+# Presence (start when everyone leaves)
 trigger: state
-entity_id: input_button.sweep_only
+entity_id: group.all_persons
+to: "not_home"
+
+# Input button (dashboard control)
+trigger: state
+entity_id: input_button.vacuum_start
+# ⚠️ Set Trigger ID to "fn_start" in advanced options
 ```
 
-**⚠️ Important:** MQTT/Device triggers auto-detect action values (`1_single`, `2_single`, etc.). For State/Event triggers, manually set Trigger ID in trigger advanced options (e.g., `fn_sweep`, `fn_mop`, `fn_start`, `fn_map1`, `fn_map2`, `fn_map3`).
+## Smart Start Workflow
 
-## Functions
+The core function adapts to robot status and location:
 
-### Mode Switching
+| Robot Status | Current Map | Action |
+|--------------|-------------|--------|
+| **Cleaning** | Any | Pause immediately |
+| **Paused** | Any | Resume cleaning |
+| **Idle** | Base station map | Start cleaning (with self-clean enabled) |
+| **Idle** | Other map | Run preparation workflow → pause for transport |
 
-**Sweep Only** and **Sweep + Mop** functions set the cleaning mode via `select.{robot}_cleaning_mode` entity.
+### Preparation Workflow (Non-Base Station Maps)
 
-Default values:
-- Sweep Only: `sweeping`
-- Sweep + Mop: `sweeping_and_mopping`
-
-Adjust in **Cleaning Settings** if your robot uses different values.
-
-### Smart Start/Pause/Resume
-
-Adaptive behavior based on robot status:
-
-| Robot Status | Action |
-|--------------|--------|
-| Idle | Start cleaning |
-| Cleaning | Pause |
-| Paused | Resume |
-
-**Multi-Floor Logic:**
-- **Base station map**: Starts cleaning immediately
-- **Other maps**: Starts cleaning, waits for cleaning status, then pauses for manual transport
-
-#### Flow Diagram
+<details>
+<summary><strong>📊 Detailed Flow Chart</strong></summary>
 
 ```mermaid
 flowchart TD
-    Start([▶️ Button Press: Smart Start]) --> GetStatus{Current<br/>Robot Status?}
+    Start([Smart Start Triggered]) --> GetStatus{Robot Status?}
 
-    GetStatus -->|Cleaning| PauseAction[⏸️ Pause Robot]
-    GetStatus -->|Paused| ResumeAction[▶️ Resume Robot]
-    GetStatus -->|Idle| CheckMap{Current Map =<br/>Base Station Map?}
+    GetStatus -->|Cleaning| Pause[Pause Robot]
+    GetStatus -->|Paused| Resume[Resume Robot]
+    GetStatus -->|Idle| CheckMap{Base Station<br/>Map?}
 
-    PauseAction --> DebugPause{Debug?}
-    ResumeAction --> DebugResume{Debug?}
+    Pause --> End1([Done])
+    Resume --> End2([Done])
 
-    DebugPause -->|Yes| NotifyPause[📢 Robot Paused]
-    DebugPause -->|No| EndPause([✅ Complete])
-    DebugResume -->|Yes| NotifyResume[📢 Robot Resumed]
-    DebugResume -->|No| EndResume([✅ Complete])
+    CheckMap -->|Yes| EnableSelfClean1[Check Self-Clean State]
+    CheckMap -->|No| CheckMode{Sweep+Mop<br/>Mode?}
 
-    NotifyPause --> EndPause
-    NotifyResume --> EndResume
+    EnableSelfClean1 --> SelfCleanOn1{Already ON?}
+    SelfCleanOn1 -->|No| TurnOnSelfClean1[Enable Self-Clean]
+    SelfCleanOn1 -->|Yes| StartBase
+    TurnOnSelfClean1 --> StartBase[Start Cleaning on Base Map]
+    StartBase --> End3([Done])
 
-    CheckMap -->|Yes| StartBase[🏠 Start Cleaning on Base Map<br/>Self-Clean: ON]
-    CheckMap -->|No| StartOther[🗺️ Start Cleaning on Other Map<br/>Self-Clean: OFF]
+    CheckMode -->|Sweep-Only| StartOther[Start Cleaning<br/>Self-Clean: OFF]
+    CheckMode -->|Sweep+Mop| EnableSelfClean2[Check Self-Clean State]
 
-    StartBase --> EndBase([✅ Complete])
-    StartOther --> WaitCleaning[⏳ Wait for Cleaning Status<br/>Timeout: 120s]
+    EnableSelfClean2 --> SelfCleanOn2{Already ON?}
+    SelfCleanOn2 -->|No| TurnOnSelfClean2[Enable Self-Clean<br/>for Preparation Program]
+    SelfCleanOn2 -->|Yes| StartPrep
+    TurnOnSelfClean2 --> StartPrep[Start Cleaning]
 
-    WaitCleaning --> CheckMoisteningNeeded{Sweep+Mop<br/>Mode?}
-    CheckMoisteningNeeded -->|Yes| WaitMoistening[💧 Wait for Moistening<br/>Timeout: 60s]
-    CheckMoisteningNeeded -->|No| CheckUndocking
+    StartPrep --> WaitCleaning[⏳ Wait for Cleaning Status]
+    StartOther --> WaitCleaning
 
-    WaitMoistening --> CheckUndocking{Charging State<br/>Sensor Available?}
+    WaitCleaning --> WaitMoistening[💧 Wait for Mop Moistening<br/>& Tank Filling]
+    WaitMoistening --> WaitUndock[🚪 Wait Until Robot<br/>Leaves Station]
+    WaitUndock --> Delay[⏱️ Move to Transport Position<br/>Delay: 2.0s default]
+    Delay --> PauseRobot[⏸️ Pause Robot]
 
-    CheckUndocking -->|Yes| WaitUndock[🚪 Wait Until Robot Leaves Station<br/>Timeout: 30s]
-    CheckUndocking -->|No| PauseTransport
-
-    WaitUndock --> CheckDelay{Pause Delay<br/>> 0s?}
-    CheckDelay -->|Yes| DelayAction[⏱️ Delay: 0.0-5.0s<br/>Default: 2.0s]
-    CheckDelay -->|No| PauseTransport
-
-    DelayAction --> PauseTransport[⏸️ Pause for Manual Transport]
-    PauseTransport --> DisableSelfClean[🔧 Disable Self-Clean]
-    DisableSelfClean --> EndTransport([✅ Ready for Transport])
+    PauseRobot --> DisableSelfClean[Check Self-Clean State]
+    DisableSelfClean --> SelfCleanOff{Already OFF?}
+    SelfCleanOff -->|No| TurnOffSelfClean[Disable Self-Clean]
+    SelfCleanOff -->|Yes| Ready
+    TurnOffSelfClean --> Ready([✅ Ready for Transport])
 
     style Start fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
-    style PauseAction fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
-    style ResumeAction fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    style Pause fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style Resume fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
     style StartBase fill:#4CAF50,stroke:#2E7D32,stroke-width:2px,color:#fff
-    style StartOther fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
-    style PauseTransport fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
-    style EndTransport fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    style StartPrep fill:#9C27B0,stroke:#6A1B9A,stroke-width:2px,color:#fff
+    style PauseRobot fill:#FF9800,stroke:#E65100,stroke-width:2px,color:#fff
+    style Ready fill:#4CAF50,stroke:#2E7D32,stroke-width:3px,color:#fff
+    style TurnOnSelfClean2 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    style TurnOffSelfClean fill:#FF5722,stroke:#BF360C,stroke-width:2px,color:#fff
 ```
 
-### Map Switching
+</details>
 
-Switches to selected map. Self-clean switch behavior is handled automatically during Smart Start:
-- **Base station map**: Self-clean always ON (robot can return to base during cleaning, moistens mops if sweep+mop mode is active)
-- **Other maps with sweep+mop mode**: Self-clean ON before start (enables mop moistening), then OFF after pause (prevents return to base during cleaning)
-- **Other maps with sweep-only mode**: Self-clean stays OFF (no moistening needed, no return to base)
+**What happens during preparation:**
 
-**Note**: The blueprint checks current switch state before toggling to avoid unnecessary commands.
+1. **Self-clean enabled** (sweep+mop mode only) - Triggers preparation program at base station
+2. **Mop moistening** - Robot wets mop pads at station
+3. **Tank filling** - Water tank is filled at station
+4. **Station exit** - Robot leaves charging station
+5. **Transport position** - Moves ~10cm away from station (configurable delay)
+6. **Pause & disable self-clean** - Ready for manual transport to target floor
 
-Supports up to 3 maps (Map 1, Map 2, Map 3). Maps are auto-detected from `camera.{robot}_map_1`, `_map_2`, `_map_3` entities. Custom map names are used if configured.
+> **Why self-clean matters**: Enabling self-clean triggers the robot's preparation program (moistening + filling) at the base station. For sweep+mop on non-base maps, this is essential. After pausing, self-clean is disabled so the robot won't try to return to base during cleaning on the target floor.
 
 ## Advanced Settings
 
-### Pause & Transport
+<details>
+<summary><strong>⚙️ Pause & Transport</strong></summary>
 
-**Pause Delay After Undocking** (0.0-5.0s, default: 2.0s): Time to wait after robot leaves charging station before pausing for manual transport.
+**Pause Delay After Undocking** (0.0-5.0s, default: 2.0s)
 
-- **0.0s**: Immediate pause (robot may still be at station contacts)
-- **2.0-3.0s**: Recommended for easier pickup (~10cm away from station)
-- **5.0s**: Maximum delay (robot moves further from station)
+Time to wait after leaving charging station before pausing. Allows the robot to move away from station contacts for easier pickup.
 
-This setting only applies when starting cleaning on non-base station maps. The robot will:
-1. Start cleaning and moisten mops (if applicable)
-2. Leave the charging station
-3. Wait the configured delay time
-4. Pause for manual transport
+- `0.0s` - Immediate pause (may still be at contacts)
+- `2.0-3.0s` - Recommended (~10cm away, easy access)
+- `5.0s` - Maximum (robot moves further away)
 
-**Auto-Detection**: The blueprint automatically detects the `binary_sensor.{robot}_charging_state` entity. If not available, the robot pauses immediately after moistening.
+</details>
 
-### Segment Service
+<details>
+<summary><strong>⏱️ Timeouts</strong></summary>
 
-**Enabled** (default): Uses `dreame_vacuum.vacuum_clean_segment` with room/segment IDs and repeat counts.
+Adjust if your robot needs more time for preparation steps:
 
-**Disabled**: Falls back to `vacuum.start` for full map cleaning.
+- **Start Timeout** (30-300s, default: 120s) - Wait for cleaning status after start command
+- **Moistening Timeout** (10-180s, default: 60s) - Wait for mop moistening (sweep+mop mode)
+- **Undocking Timeout** (10-60s, default: 30s) - Wait for robot to leave station
 
-### Timeouts
+> **Tip**: Enable debug mode to see actual durations and optimize timeout values for your robot.
 
-- **Start Timeout** (30-300s, default: 120s): Max wait for robot to reach cleaning status after start command. Automation aborts on timeout.
-- **Moistening Timeout** (10-180s, default: 60s): Max wait for mop moistening status. Continues on timeout (optional feature).
-- **Undocking Timeout** (10-60s, default: 30s): Max wait for robot to leave charging station (charging_state = off). Continues on timeout. Only applies to non-base station maps with sweep+mop mode.
+</details>
 
-### Cleaning States
+<details>
+<summary><strong>🎯 Segment Cleaning</strong></summary>
 
-Comma-separated list of status values indicating active cleaning. Used for pause detection.
+**Enabled** (default): Uses room/segment-based cleaning with configurable repeat counts via `dreame_vacuum.vacuum_clean_segment`.
 
-Default: `cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping`
+**Disabled**: Falls back to full map cleaning via `vacuum.start`.
 
-Only change if your robot reports different status values (check `sensor.{robot}_status`).
+</details>
+
+<details>
+<summary><strong>🐛 Debug Mode</strong></summary>
+
+Shows persistent notifications with detailed execution information:
+
+- Triggered function and robot status
+- Auto-detected maps and base station
+- **Timing measurements** - Real-time duration for each step
+- **Timeout detection** - Identifies which step timed out
+- **Timing summary** - Complete overview at end of preparation workflow
+
+Helpful for troubleshooting and optimizing timeout values.
+
+</details>
 
 ## Troubleshooting
 
-### Automation Not Triggering
+**Automation not triggering?**
+- Verify at least one function has configured triggers
+- Enable debug mode to see trigger details
 
-1. Verify at least one function has configured triggers
-2. Check trigger configuration (topic, device_id, entity_id)
-3. Enable **Debug Mode** to see trigger details in persistent notifications
+**Robot not starting/pausing as expected?**
+- Check entity auto-detection in debug mode
+- Verify cleaning mode values match your robot (check `select.{robot}_cleaning_mode` in Developer Tools → States)
 
-### Robot Not Starting/Pausing
+**Segments not working?**
+- Verify `camera.{robot}_map` has `rooms` or `segments` attribute
+- Disable segment service to use fallback mode
 
-1. Verify entity auto-detection: Check `sensor.{robot}_status`, `select.{robot}_cleaning_mode`, `select.{robot}_selected_map`
-2. Check cleaning mode values in **Cleaning Settings** match your robot's options (Developer Tools → States)
-3. Review cleaning states configuration
+## Technical Notes
 
-### Segments Not Found
+**Automation Mode**: `queued` (max: 10) - Processes triggers sequentially without cancellation. Required for button devices that send press + release events (e.g., Zigbee2MQTT).
 
-1. Verify `camera.{robot}_map` entity has `rooms` or `segments` attribute
-2. Check robot is online and map is loaded
-3. Disable **Use Segment Service** to use fallback `vacuum.start`
-
-### Debug Mode
-
-Enable in **Advanced Settings** to show detailed information on every trigger:
-- Triggered function and trigger details
-- Robot status, map, and mode
-- Auto-detected maps and base station
-- Available rooms/segments
-- **Timing measurements**: Real-time duration tracking for each operation step (start cleaning, moistening, undocking, delay)
-- **Timeout detection**: Identifies which step timed out if a timeout occurs
-- **Timing summary**: Complete overview of all step durations at the end of non-base station starts
-
-## Automation Mode
-
-**Mode:** `queued` (max: 10)
-
-Processes button presses sequentially without cancellation. Required for Zigbee2MQTT buttons that send press + release events.
-
-## Status
-
-This blueprint is in **alpha testing** (v0.2.9). Core functionality is implemented and tested with Dreame X10+. Feedback and bug reports welcome via GitHub Issues.
+**Status**: Alpha testing (v0.2.9) - Core functionality tested with Dreame X10+. Feedback welcome via [GitHub Issues](https://github.com/errormastern/dreame-multifloor-control/issues).
 
 ## Links
 
-- **Repository**: https://github.com/errormastern/Dreame_Multifloor_Button_Control
-- **Dreame Vacuum Integration**: https://github.com/Tasshack/dreame-vacuum
-- **Zigbee2MQTT**: https://www.zigbee2mqtt.io
+- [Dreame Vacuum Integration](https://github.com/Tasshack/dreame-vacuum) - Required custom integration
+- [Repository](https://github.com/errormastern/dreame-multifloor-control) - Source code and releases
 
-## License
+---
 
-MIT License - Free to use and modify.
+**License**: MIT - Free to use and modify
