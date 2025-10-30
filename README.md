@@ -1,6 +1,6 @@
 # Dreame Vacuum Multi-Floor Button Control
 
-[![Version](https://img.shields.io/badge/version-0.2.8-blue.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control/releases)
+[![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/Dreame_Multifloor_Button_Control)
@@ -14,9 +14,9 @@ Multi-floor control for Dreame vacuum cleaners via button triggers (MQTT, Device
 - **Intelligent Start/Pause**: Base station detection and adaptive behavior
 - **Smart Undocking**: Configurable delay after leaving station for easier robot pickup
 - **Room/Segment Cleaning**: Configurable repeat counts
-- **Self-Clean Automation**: Automatically enabled/disabled based on current map
+- **Self-Clean Automation**: Automatically enabled/disabled based on current map and mode (with state checks to avoid unnecessary commands)
 - **Map Switching**: Up to 3 maps
-- **Debug Mode**: Persistent notifications for troubleshooting
+- **Debug Mode**: Persistent notifications with timing measurements and timeout detection
 
 ## Requirements
 
@@ -168,9 +168,12 @@ flowchart TD
 
 ### Map Switching
 
-Switches to selected map and adjusts self-clean switch:
-- **Base station map**: Self-clean ON (returns to base after cleaning)
-- **Other maps**: Self-clean OFF (manual transport required)
+Switches to selected map. Self-clean switch behavior is handled automatically during Smart Start:
+- **Base station map**: Self-clean always ON (robot can return to base during cleaning, moistens mops if sweep+mop mode is active)
+- **Other maps with sweep+mop mode**: Self-clean ON before start (enables mop moistening), then OFF after pause (prevents return to base during cleaning)
+- **Other maps with sweep-only mode**: Self-clean stays OFF (no moistening needed, no return to base)
+
+**Note**: The blueprint checks current switch state before toggling to avoid unnecessary commands.
 
 Supports up to 3 maps (Map 1, Map 2, Map 3). Maps are auto-detected from `camera.{robot}_map_1`, `_map_2`, `_map_3` entities. Custom map names are used if configured.
 
@@ -200,8 +203,9 @@ This setting only applies when starting cleaning on non-base station maps. The r
 
 ### Timeouts
 
-- **Start Timeout** (120s): Max wait for robot to reach cleaning status after start command. Automation aborts on timeout.
-- **Moistening Timeout** (60s): Max wait for mop moistening status. Continues on timeout (optional feature).
+- **Start Timeout** (30-300s, default: 120s): Max wait for robot to reach cleaning status after start command. Automation aborts on timeout.
+- **Moistening Timeout** (10-180s, default: 60s): Max wait for mop moistening status. Continues on timeout (optional feature).
+- **Undocking Timeout** (10-60s, default: 30s): Max wait for robot to leave charging station (charging_state = off). Continues on timeout. Only applies to non-base station maps with sweep+mop mode.
 
 ### Cleaning States
 
@@ -238,6 +242,9 @@ Enable in **Advanced Settings** to show detailed information on every trigger:
 - Robot status, map, and mode
 - Auto-detected maps and base station
 - Available rooms/segments
+- **Timing measurements**: Real-time duration tracking for each operation step (start cleaning, moistening, undocking, delay)
+- **Timeout detection**: Identifies which step timed out if a timeout occurs
+- **Timing summary**: Complete overview of all step durations at the end of non-base station starts
 
 ## Automation Mode
 
@@ -247,7 +254,7 @@ Processes button presses sequentially without cancellation. Required for Zigbee2
 
 ## Status
 
-This blueprint is in **alpha testing** (v0.2.8). Core functionality is implemented and tested with Dreame X10+. Feedback and bug reports welcome via GitHub Issues.
+This blueprint is in **alpha testing** (v0.2.9). Core functionality is implemented and tested with Dreame X10+. Feedback and bug reports welcome via GitHub Issues.
 
 ## Links
 

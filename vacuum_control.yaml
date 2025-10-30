@@ -1,7 +1,7 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.8 (Alpha)**
+    **Version: 0.2.9 (Alpha)**
 
 
     Multi-floor control for Dreame vacuum cleaners via button triggers.
@@ -249,6 +249,18 @@ blueprint:
               mode: slider
           default: 60
 
+        undocking_timeout:
+          name: "Undocking Timeout"
+          description: "Maximum wait time (seconds) for robot to leave charging station (charging_state = off). Only applies to non-base station maps with sweep+mop mode. Automation continues on timeout (pause immediately)."
+          selector:
+            number:
+              min: 10
+              max: 60
+              step: 5
+              unit_of_measurement: "s"
+              mode: slider
+          default: 30
+
         # ============================================
         # MODE VALUES
         # ============================================
@@ -446,6 +458,7 @@ variables:
   pause_delay_after_undock: !input pause_delay_after_undock
   start_timeout: !input start_timeout
   moistening_timeout: !input moistening_timeout
+  undocking_timeout: !input undocking_timeout
   use_segment_service: !input use_segment_service
   debug_mode: !input debug_mode
 
@@ -721,10 +734,11 @@ actions:
                       - condition: template
                         value_template: "{{ is_base_station_map }}"
                     sequence:
-                      # Ensure self_clean is ON for base station cleaning
+                      # Ensure self_clean is ALWAYS ON for base station cleaning
+                      # (regardless of sweep-only or sweep+mop mode)
                       - if:
                           - condition: template
-                            value_template: "{{ has_value(self_clean_switch) }}"
+                            value_template: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'off') }}"
                         then:
                           - action: switch.turn_on
                             target:
@@ -737,7 +751,7 @@ actions:
                               - action: persistent_notification.create
                                 data:
                                   title: "🔧 Self-Clean Enabled"
-                                  message: "Self-clean enabled - robot can return to station during cleaning."
+                                  message: "Self-clean enabled - robot can return to station during cleaning (moistening only if sweep+mop mode)."
 
                       - if:
                           - condition: template
@@ -779,10 +793,11 @@ actions:
 
                 # On other map → Start and pause (for manual transport)
                 default:
-                  # Enable self_clean for station preparation
+                  # Enable self_clean ONLY for sweep+mop mode (for moistening)
+                  # For sweep-only, self_clean stays OFF (no moistening needed)
                   - if:
                       - condition: template
-                        value_template: "{{ has_value(self_clean_switch) }}"
+                        value_template: "{{ has_value(self_clean_switch) and current_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
                     then:
                       - action: switch.turn_on
                         target:
@@ -795,7 +810,15 @@ actions:
                           - action: persistent_notification.create
                             data:
                               title: "🔧 Self-Clean Enabled"
-                              message: "Preparing robot at station (moistening mops, filling water tank)..."
+                              message: "Preparing robot at station (moistening mops for sweep+mop mode)..."
+
+                  # Initialize timing variables
+                  - variables:
+                      timing_start_cleaning: "{{ now().timestamp() }}"
+                      timing_start_moistening: null
+                      timing_start_undocking: null
+                      timing_start_delay: null
+                      timeout_step: null
 
                   - if:
                       - condition: template
@@ -818,21 +841,55 @@ actions:
                       seconds: "{{ start_timeout }}"
                     continue_on_timeout: false
 
+                  - variables:
+                      timing_end_cleaning: "{{ now().timestamp() }}"
+                      duration_start_cleaning: "{{ (timing_end_cleaning - timing_start_cleaning) | round(1) }}"
+                      timeout_step: "{{ 'start_cleaning' if not wait.completed else timeout_step }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "⏱️ Timing: Start Cleaning"
+                          message: "Duration: {{ duration_start_cleaning }}s / {{ start_timeout }}s{{ ' (TIMEOUT)' if not wait.completed else '' }}"
+
                   # Optional: Wait for moistening (for sweep+mop)
                   - if:
                       - condition: template
                         value_template: "{{ current_mode == mode_sweeping_mopping and moistening_status != '' }}"
                     then:
+                      - variables:
+                          timing_start_moistening: "{{ now().timestamp() }}"
+
                       - wait_template: "{{ states(status_sensor) == moistening_status }}"
                         timeout:
                           seconds: "{{ moistening_timeout }}"
                         continue_on_timeout: true
+
+                      - variables:
+                          timing_end_moistening: "{{ now().timestamp() }}"
+                          duration_moistening: "{{ (timing_end_moistening - timing_start_moistening) | round(1) }}"
+                          timeout_step: "{{ 'moistening' if not wait.completed and timeout_step is none else timeout_step }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏱️ Timing: Moistening"
+                              message: "Duration: {{ duration_moistening }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
 
                   # Wait until robot has left charging station
                   - if:
                       - condition: template
                         value_template: "{{ has_value(charging_state_sensor) }}"
                     then:
+                      - variables:
+                          timing_start_undocking: "{{ now().timestamp() }}"
+
                       - if:
                           - condition: template
                             value_template: "{{ debug_mode }}"
@@ -844,14 +901,31 @@ actions:
 
                       - wait_template: "{{ is_state(charging_state_sensor, 'off') }}"
                         timeout:
-                          seconds: 30
+                          seconds: "{{ undocking_timeout }}"
                         continue_on_timeout: true
+
+                      - variables:
+                          timing_end_undocking: "{{ now().timestamp() }}"
+                          duration_undocking: "{{ (timing_end_undocking - timing_start_undocking) | round(1) }}"
+                          timeout_step: "{{ 'undocking' if not wait.completed and timeout_step is none else timeout_step }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏱️ Timing: Undocking"
+                              message: "Duration: {{ duration_undocking }}s / {{ undocking_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
 
                   # Optional delay after undocking for easier pickup
                   - if:
                       - condition: template
                         value_template: "{{ pause_delay_after_undock > 0 }}"
                     then:
+                      - variables:
+                          timing_start_delay: "{{ now().timestamp() }}"
+
                       - if:
                           - condition: template
                             value_template: "{{ debug_mode }}"
@@ -864,6 +938,10 @@ actions:
                       - delay:
                           seconds: "{{ pause_delay_after_undock }}"
 
+                      - variables:
+                          timing_end_delay: "{{ now().timestamp() }}"
+                          duration_delay: "{{ (timing_end_delay - timing_start_delay) | round(1) }}"
+
                   # Pause for manual transport
                   - action: vacuum.pause
                     target:
@@ -872,7 +950,7 @@ actions:
                   # Disable self_clean after pause (robot should not return to station)
                   - if:
                       - condition: template
-                        value_template: "{{ has_value(self_clean_switch) }}"
+                        value_template: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
                     then:
                       - action: switch.turn_off
                         target:
@@ -898,6 +976,31 @@ actions:
                             Map: {{ current_map_name }}
                             Please transport the robot to the target map.
                             Press button again to resume.
+
+                      # Timing Summary
+                      - action: persistent_notification.create
+                        data:
+                          title: "📊 Timing Summary - Non-Base Station Start"
+                          message: |
+                            **Step Durations:**
+                            • Start → Cleaning: {{ duration_start_cleaning }}s / {{ start_timeout }}s{{ ' ⚠️ TIMEOUT' if timeout_step == 'start_cleaning' else ' ✅' }}
+                            {% if timing_start_moistening is not none %}
+                            • Moistening: {{ duration_moistening }}s / {{ moistening_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'moistening' else ' ✅' }}
+                            {% endif %}
+                            {% if timing_start_undocking is not none %}
+                            • Undocking: {{ duration_undocking }}s / {{ undocking_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'undocking' else ' ✅' }}
+                            {% endif %}
+                            {% if timing_start_delay is not none %}
+                            • Post-Undock Delay: {{ duration_delay }}s
+                            {% endif %}
+
+                            **Total Time:** {{ (now().timestamp() - timing_start_cleaning) | round(1) }}s
+
+                            {% if timeout_step is not none %}
+                            **⚠️ Timeout Occurred:** {{ timeout_step }}
+                            {% else %}
+                            **Status:** All steps completed successfully
+                            {% endif %}
 
       # ========================================
       # FUNCTION 4: Map 1 Switch (fn_map1)
