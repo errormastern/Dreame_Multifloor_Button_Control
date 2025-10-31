@@ -1,28 +1,45 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.2.9 (Alpha)**
+    **Version: 0.3.3 (Alpha - Schedule Integration)**
 
 
-    Multi-floor control for Dreame vacuum cleaners via button triggers.
+    Multi-floor control for Dreame vacuum cleaners with schedule integration and notification-based preparation workflow.
 
 
-    **Features:**
+    **Core Features:**
 
     • Zero configuration - Select vacuum entity, all else auto-detected
+
+    • Per-map schedules - Separate sweep/mop schedules for each map (3 maps supported)
+
+    • Automatic base station detection - Maps with base station start automatically
+
+    • Notification workflow - Maps without base station send preparation notifications with action buttons
 
     • Flexible triggers - MQTT, Device, State, or Event per function
 
     • Intelligent start/pause/resume with base station detection
 
-    • Room/segment cleaning with configurable repeat counts
-
-    • Self-clean automation based on current map
-
-    • Map switching (up to 3 maps)
+    • Room/segment cleaning with configurable repeat counts per map
 
 
-    **Functions:**
+    **Schedule Integration (NEW in v0.3.3):**
+
+    • Per-map sweep + mop schedules (6 schedules total)
+
+    • Conflict detection - Only 1 schedule runs at a time
+
+    • Maps WITH base station → Start cleaning automatically
+
+    • Maps WITHOUT base station → Send notification with "Prepare Robot" button
+
+    • Template-based notifications with customizable messages and action buttons
+
+    • Repeat notifications (1-3 times, configurable interval)
+
+
+    **Manual Control Functions:**
 
     • Mode switching (sweep only / sweep + mop)
 
@@ -39,6 +56,8 @@ blueprint:
 
     • At least one saved map configured
 
+    • Optional: Schedule Helpers for time-based automation
+
 
     📖 [Documentation](https://github.com/errormastern/dreame-multifloor-control)
   domain: automation
@@ -51,9 +70,9 @@ blueprint:
     # ========================================
     robot_config:
       name: "Robot Configuration"
-      description: "Select your Dreame vacuum robot. All related entities are auto-detected."
+      description: "Select your Dreame vacuum robot and configure transport behavior. All entity references are auto-detected."
       icon: mdi:robot-vacuum
-      collapsed: false
+      collapsed: true
       input:
         vacuum_entity:
           name: "Vacuum Entity"
@@ -64,101 +83,351 @@ blueprint:
                 - domain: vacuum
               multiple: false
 
-    # ========================================
-    # FUNCTION: SWEEP ONLY MODE
-    # ========================================
-    function_sweep_only:
-      name: "Sweep Only Mode"
-      description: "Set vacuum to sweep-only mode (no mopping). Activates when triggers are configured."
-      icon: mdi:vacuum
-      collapsed: true
-      input:
-        sweep_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_sweep` in advanced options."
+        pause_delay_after_undock:
+          name: "Pause Delay After Undocking"
+          description: "Time (seconds) to wait after robot leaves charging station before pausing for manual transport. Allows robot to move slightly away from station for easier pickup. Set to 0 for immediate pause, 2-3s recommended for easier access. Only applies to non-base station maps."
           selector:
-            trigger:
-          default: []
+            number:
+              min: 0.0
+              max: 5.0
+              step: 0.1
+              unit_of_measurement: "s"
+              mode: slider
+          default: 2.0
 
     # ========================================
-    # FUNCTION: SWEEP + MOP MODE
+    # MAP 1 CONFIGURATION
     # ========================================
-    function_sweep_mop:
-      name: "Sweep + Mop Mode"
-      description: "Set vacuum to sweep + mop mode (full cleaning). Activates when triggers are configured."
-      icon: mdi:water
-      collapsed: true
-      input:
-        mop_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_mop` in advanced options."
-          selector:
-            trigger:
-          default: []
-
-    # ========================================
-    # FUNCTION: SMART START/PAUSE/RESUME
-    # ========================================
-    function_smart_start:
-      name: "Smart Start/Pause/Resume"
-      description: "Intelligent control: Start when idle, pause when cleaning, resume when paused. Activates when triggers are configured."
-      icon: mdi:play-pause
-      collapsed: true
-      input:
-        start_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_start` in advanced options."
-          selector:
-            trigger:
-          default: []
-
-    # ========================================
-    # FUNCTION: MAP 1 SWITCH
-    # ========================================
-    function_map_1:
-      name: "Map 1 Switch"
-      description: "Switch to Map 1 (auto-detected). Activates when triggers are configured."
+    map_1_config:
+      name: "Map 1"
+      description: "Configure Map 1: button trigger, cleaning settings, and schedules (map name auto-detected)"
       icon: mdi:home-floor-1
       collapsed: true
       input:
         map1_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map1` in advanced options."
+          name: "Map Switch Trigger"
+          description: "Trigger to switch to Map 1. MQTT/Device triggers auto-detect action. For State/Event triggers: Set Trigger ID to `fn_map1` in advanced options."
           selector:
             trigger:
           default: []
 
+        map_1_cleaning_repeats:
+          name: "Cleaning Repeats"
+          description: "Number of cleaning passes for this map (1-3). Higher values for intensive cleaning."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+              unit_of_measurement: "passes"
+          default: 2
+
+        map_1_sweep_schedule:
+          name: "Sweep-Only Schedule (Optional)"
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
+        map_1_mop_schedule:
+          name: "Sweep+Mop Schedule (Optional)"
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
     # ========================================
-    # FUNCTION: MAP 2 SWITCH
+    # MAP 2 CONFIGURATION
     # ========================================
-    function_map_2:
-      name: "Map 2 Switch"
-      description: "Switch to Map 2 (auto-detected). Activates when triggers are configured."
+    map_2_config:
+      name: "Map 2"
+      description: "Configure Map 2: button trigger, cleaning settings, and schedules (map name auto-detected)"
       icon: mdi:home-floor-2
       collapsed: true
       input:
         map2_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map2` in advanced options."
+          name: "Map Switch Trigger"
+          description: "Trigger to switch to Map 2. MQTT/Device triggers auto-detect action. For State/Event triggers: Set Trigger ID to `fn_map2` in advanced options."
+          selector:
+            trigger:
+          default: []
+
+        map_2_cleaning_repeats:
+          name: "Cleaning Repeats"
+          description: "Number of cleaning passes for this map (1-3). Higher values for intensive cleaning."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+              unit_of_measurement: "passes"
+          default: 2
+
+        map_2_sweep_schedule:
+          name: "Sweep-Only Schedule (Optional)"
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
+        map_2_mop_schedule:
+          name: "Sweep+Mop Schedule (Optional)"
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
+    # ========================================
+    # MAP 3 CONFIGURATION
+    # ========================================
+    map_3_config:
+      name: "Map 3"
+      description: "Configure Map 3: button trigger, cleaning settings, and schedules (map name auto-detected)"
+      icon: mdi:home-floor-3
+      collapsed: true
+      input:
+        map3_trigger:
+          name: "Map Switch Trigger"
+          description: "Trigger to switch to Map 3. MQTT/Device triggers auto-detect action. For State/Event triggers: Set Trigger ID to `fn_map3` in advanced options."
+          selector:
+            trigger:
+          default: []
+
+        map_3_cleaning_repeats:
+          name: "Cleaning Repeats"
+          description: "Number of cleaning passes for this map (1-3). Higher values for intensive cleaning."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+              unit_of_measurement: "passes"
+          default: 2
+
+        map_3_sweep_schedule:
+          name: "Sweep-Only Schedule (Optional)"
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
+        map_3_mop_schedule:
+          name: "Sweep+Mop Schedule (Optional)"
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
+          default: ""
+          selector:
+            entity:
+              filter:
+                - domain: schedule
+
+    # ========================================
+    # CONTROL FUNCTIONS
+    # ========================================
+    control_functions:
+      name: "Control Functions"
+      description: "Configure triggers for mode switching and cleaning control (buttons, schedules, automations, etc.)"
+      icon: mdi:gesture-tap-button
+      collapsed: true
+      input:
+        sweep_trigger:
+          name: "Sweep Only Mode Trigger"
+          description: "Set vacuum to sweep-only mode (no mopping). MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_sweep` in advanced options."
+          selector:
+            trigger:
+          default: []
+
+        mop_trigger:
+          name: "Sweep + Mop Mode Trigger"
+          description: "Set vacuum to sweep + mop mode (full cleaning). MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_mop` in advanced options."
+          selector:
+            trigger:
+          default: []
+
+        start_trigger:
+          name: "Smart Start/Pause/Resume Trigger"
+          description: "Intelligent control: Start when idle, pause when cleaning, resume when paused. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_start` in advanced options."
           selector:
             trigger:
           default: []
 
     # ========================================
-    # FUNCTION: MAP 3 SWITCH
+    # SCHEDULED CLEANING NOTIFICATIONS
     # ========================================
-    function_map_3:
-      name: "Map 3 Switch"
-      description: "Switch to Map 3 (auto-detected). Activates when triggers are configured."
-      icon: mdi:home-floor-3
+    scheduled_notification_config:
+      name: "Scheduled Cleaning Notifications"
+      description: "Notifications when schedule triggers on maps without base station. User can start preparation process via button, then robot moves to waiting position."
+      icon: mdi:calendar-clock
       collapsed: true
       input:
-        map3_trigger:
-          name: "Trigger Configuration"
-          description: "Add trigger(s) for this function. MQTT/Device triggers auto-detect action. ⚠️ For State/Event triggers: Set Trigger ID to `fn_map3` in advanced options."
+        scheduled_notification_enabled:
+          name: "Enable Notifications"
+          description: "Send notification when schedule triggers on a map without base station. 'Prepare Robot' button starts the preparation process (robot moves to waiting position), then Pickup Notification follows."
           selector:
-            trigger:
-          default: []
+            boolean:
+          default: false
+
+        scheduled_notification_service:
+          name: "Notification Service"
+          description: "Service for sending notifications (e.g., notify.notify, notify.mobile_app_iphone). Check your notification services in Developer Tools → Services."
+          selector:
+            text:
+          default: "notify.notify"
+
+        scheduled_notification_title:
+          name: "Title"
+          description: "Notification title. Supports templates. Available variables: {{ robot_name }}, {{ map_name }}, {{ cleaning_mode_display }}, {{ schedule_name }}, {{ current_time }}, {{ repeat_number }}"
+          selector:
+            text:
+          default: "Scheduled Cleaning Ready"
+
+        scheduled_notification_message:
+          name: "Message"
+          description: "Notification message body. Supports templates. Available variables: {{ robot_name }}, {{ map_name }}, {{ cleaning_mode_display }}, {{ schedule_name }}, {{ current_time }}, {{ wait_minutes }}, {{ repeat_number }}"
+          selector:
+            text:
+              multiline: true
+          default: "{{ robot_name }} is ready for scheduled cleaning on {{ map_name }} ({{ cleaning_mode_display }}). Please prepare the robot."
+
+        scheduled_notification_repeat_count:
+          name: "Repeat Count"
+          description: "Number of times to repeat the notification if no action is taken (1-3). Stops after user clicks a button or max repeats reached."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+          default: 2
+
+        scheduled_notification_repeat_interval:
+          name: "Repeat Interval"
+          description: "Wait time (minutes) before sending the next reminder (0-240). Set to 0 to disable repeats."
+          selector:
+            number:
+              min: 0
+              max: 240
+              step: 5
+              unit_of_measurement: "min"
+              mode: slider
+          default: 15
+
+        scheduled_notification_action1_name:
+          name: "Prepare Button Name"
+          description: "Button name for 'Prepare Robot' action (stops repeats, waits for manual resume). Action ID: PREPARE_ROBOT"
+          selector:
+            text:
+          default: "Prepare Robot"
+
+        scheduled_notification_action2_name:
+          name: "Skip Button Name"
+          description: "Button name for 'Skip Cleaning' action (cancels this scheduled cleaning, no repeats). Action ID: SKIP_CLEANING"
+          selector:
+            text:
+          default: "Skip Cleaning"
+
+        scheduled_notification_data:
+          name: "Advanced Data (Optional)"
+          description: "YAML data for iOS/Android-specific features (e.g., critical alerts, sounds, icons). Leave empty for standard notifications. Example for iOS critical: push:\n  sound:\n    name: default\n    critical: 1\n    volume: 1.0"
+          selector:
+            text:
+              multiline: true
+          default: ""
+
+    # ========================================
+    # PICKUP NOTIFICATIONS
+    # ========================================
+    pickup_notification_config:
+      name: "Pickup Notifications"
+      description: "Notifications when robot is paused and ready for transport. Supports template variables for customization."
+      icon: mdi:robot-vacuum-alert
+      collapsed: true
+      input:
+        pickup_notification_enabled:
+          name: "Enable Notifications"
+          description: "Send notification when robot is paused and ready for manual transport to target map."
+          selector:
+            boolean:
+          default: false
+
+        pickup_notification_service:
+          name: "Notification Service"
+          description: "Service for sending notifications (e.g., notify.notify, notify.mobile_app_iphone). Check your notification services in Developer Tools → Services."
+          selector:
+            text:
+          default: "notify.notify"
+
+        pickup_notification_title:
+          name: "Title"
+          description: "Notification title. Supports templates. Available variables: {{ robot_name }}, {{ map_name }}, {{ current_map }}, {{ cleaning_mode_display }}, {{ current_time }}, {{ repeat_number }}"
+          selector:
+            text:
+          default: "Robot Ready for Transport"
+
+        pickup_notification_message:
+          name: "Message"
+          description: "Notification message body. Supports templates. Available variables: {{ robot_name }}, {{ map_name }}, {{ current_map }}, {{ cleaning_mode_display }}, {{ current_time }}, {{ wait_minutes }}, {{ repeat_number }}"
+          selector:
+            text:
+              multiline: true
+          default: "{{ robot_name }} is paused and ready for transport to {{ map_name }}. Please pick up the robot."
+
+        pickup_notification_repeat_count:
+          name: "Repeat Count"
+          description: "Number of times to repeat the notification if cleaning not started (1-3). Stops when robot status changes to cleaning or max repeats reached."
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 1
+              mode: slider
+          default: 2
+
+        pickup_notification_repeat_interval:
+          name: "Repeat Interval"
+          description: "Wait time (minutes) before sending the next reminder if robot not started (0-240). Set to 0 to disable repeats."
+          selector:
+            number:
+              min: 0
+              max: 240
+              step: 5
+              unit_of_measurement: "min"
+              mode: slider
+          default: 10
+
+        pickup_notification_action1_name:
+          name: "Start Button Name"
+          description: "Button name for 'Start Cleaning' action (resumes cleaning after transport). Action ID: START_CLEANING"
+          selector:
+            text:
+          default: "Start Cleaning"
+
+        pickup_notification_action2_name:
+          name: "Cancel Button Name"
+          description: "Button name for 'Cancel Cleaning' action (returns robot to base station). Action ID: CANCEL_CLEANING"
+          selector:
+            text:
+          default: "Cancel Cleaning"
+
+        pickup_notification_data:
+          name: "Advanced Data (Optional)"
+          description: "YAML data for iOS/Android-specific features (e.g., critical alerts, sounds, icons). Leave empty for standard notifications."
+          selector:
+            text:
+              multiline: true
+          default: ""
 
     # ========================================
     # CLEANING SETTINGS
@@ -169,9 +438,9 @@ blueprint:
       icon: mdi:tune
       collapsed: true
       input:
-        cleaning_repeats:
-          name: "Cleaning Repeats"
-          description: "Number of cleaning passes per room/segment. Only used when segment service is enabled. Recommended: 1 for daily, 2 for normal, 3 for intensive cleaning."
+        global_cleaning_repeats:
+          name: "Global Cleaning Repeats (Fallback)"
+          description: "Default number of cleaning passes per room/segment when per-map repeats are not configured. Only used when segment service is enabled. Per-map repeats take priority. Recommended: 1 for daily, 2 for normal, 3 for intensive cleaning."
           selector:
             number:
               min: 1
@@ -198,45 +467,8 @@ blueprint:
       collapsed: true
       input:
         # ============================================
-        # CLEANING BEHAVIOR
-        # ============================================
-        moistening_status:
-          name: "Moistening Status (optional)"
-          description: "Status during mop pad moistening (e.g., moistening, wetting_mop). Used for sweep+mop on non-base maps: waits for this status before pausing for manual transport. Leave empty if unsure or not applicable."
-          selector:
-            text:
-          default: ""
-
-        # ============================================
-        # PAUSE & TRANSPORT
-        # ============================================
-        pause_delay_after_undock:
-          name: "Pause Delay After Undocking"
-          description: "Time (seconds) to wait after robot leaves charging station before pausing for manual transport. Allows robot to move slightly away from station for easier pickup. Set to 0 for immediate pause, 2-3s recommended for easier access. Only applies to non-base station maps."
-          selector:
-            number:
-              min: 0.0
-              max: 5.0
-              step: 0.1
-              unit_of_measurement: "s"
-              mode: slider
-          default: 2.0
-
-        # ============================================
         # TIMEOUTS
         # ============================================
-        start_timeout:
-          name: "Start Timeout"
-          description: "Maximum wait time (seconds) until robot reaches cleaning status. Required for map switching to wait before pausing for manual transport. Automation aborts on timeout."
-          selector:
-            number:
-              min: 30
-              max: 300
-              step: 10
-              unit_of_measurement: "s"
-              mode: slider
-          default: 120
-
         moistening_timeout:
           name: "Moistening Timeout"
           description: "Maximum wait time (seconds) for moistening status. Only relevant if moistening status is configured. Automation continues on timeout (no abort)."
@@ -248,6 +480,18 @@ blueprint:
               unit_of_measurement: "s"
               mode: slider
           default: 60
+
+        start_timeout:
+          name: "Start Timeout"
+          description: "Maximum wait time (seconds) until robot reaches cleaning status. Required for map switching to wait before pausing for manual transport. Automation aborts on timeout."
+          selector:
+            number:
+              min: 30
+              max: 300
+              step: 10
+              unit_of_measurement: "s"
+              mode: slider
+          default: 120
 
         undocking_timeout:
           name: "Undocking Timeout"
@@ -288,6 +532,13 @@ blueprint:
             text:
           default: "cleaning,returning,zone_cleaning,room_cleaning,sweeping,mopping,sweeping_and_mopping"
 
+        moistening_status:
+          name: "Moistening Status"
+          description: "Status during mop pad moistening (e.g., moistening, wetting_mop). Used for sweep+mop on non-base maps: waits for this status before pausing for manual transport. Leave empty if unsure or not applicable."
+          selector:
+            text:
+          default: ""
+
         paused_state:
           name: "Paused State"
           description: "Status value indicating that the robot is paused. Used for resume logic in smart start/pause function."
@@ -296,7 +547,7 @@ blueprint:
           default: "paused"
 
         # ============================================
-        # DEBUG & NOTIFICATIONS
+        # DEBUG
         # ============================================
         debug_mode:
           name: "Debug Mode"
@@ -350,6 +601,75 @@ triggers:
   # FUNCTION 6: Map 3 Switch
   # ========================================
   - triggers: !input map3_trigger
+
+  # ========================================
+  # SCHEDULE TRIGGERS (Per-Map Scheduled Cleaning)
+  # ========================================
+  # Note: If schedule input is empty (default), trigger will never fire
+  # Map 1 Schedules
+  - trigger: state
+    entity_id: !input map_1_sweep_schedule
+    to: "on"
+    id: schedule_map1_sweep
+
+  - trigger: state
+    entity_id: !input map_1_mop_schedule
+    to: "on"
+    id: schedule_map1_mop
+
+  # Map 2 Schedules
+  - trigger: state
+    entity_id: !input map_2_sweep_schedule
+    to: "on"
+    id: schedule_map2_sweep
+
+  - trigger: state
+    entity_id: !input map_2_mop_schedule
+    to: "on"
+    id: schedule_map2_mop
+
+  # Map 3 Schedules
+  - trigger: state
+    entity_id: !input map_3_sweep_schedule
+    to: "on"
+    id: schedule_map3_sweep
+
+  - trigger: state
+    entity_id: !input map_3_mop_schedule
+    to: "on"
+    id: schedule_map3_mop
+
+  # ========================================
+  # NOTIFICATION ACTION TRIGGERS
+  # ========================================
+  # Triggered by mobile app notification button clicks
+  # These handle user responses to notifications (prepare, skip, start, cancel)
+
+  # Scheduled Cleaning Actions
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "PREPARE_ROBOT"
+    id: notification_prepare
+
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "SKIP_CLEANING"
+    id: notification_skip
+
+  # Pickup Actions
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "START_CLEANING"
+    id: notification_start
+
+  - trigger: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: "CANCEL_CLEANING"
+    id: notification_cancel
 
 # ========================================
 # VARIABLEN
@@ -446,11 +766,127 @@ variables:
     {{ ns.found if ns.found != '' else 'Map 1' }}
 
   # ========================================
+  # PER-MAP CONFIGURATION STRUCTURE
+  # ========================================
+  # Structured configuration for each map with auto-detected features
+  # Used for dynamic per-map behavior based on current_map_name
+  map_config:
+    map_1:
+      name: "{{ map_1_name }}"
+      cleaning_repeats: !input map_1_cleaning_repeats
+      sweep_schedule: !input map_1_sweep_schedule
+      mop_schedule: !input map_1_mop_schedule
+      # Auto-detected: Base station presence
+      has_base_station: "{{ map_1_name == base_station_map }}"
+      # Auto-detected: Available segments/rooms for this map
+      segments: >
+        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_1' %}
+        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
+          {% set segments_raw = state_attr(map_entity, 'segments') %}
+          {% if rooms_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, room in rooms_raw.items() %}
+              {% if room.room_id is defined %}
+                {% set ns.ids = ns.ids + [room.room_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% elif segments_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, segment in segments_raw.items() %}
+              {% if segment.segment_id is defined %}
+                {% set ns.ids = ns.ids + [segment.segment_id] %}
+              {% else %}
+                {% set ns.ids = ns.ids + [key | int] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% else %}
+            []
+          {% endif %}
+        {% else %}
+          []
+        {% endif %}
+    map_2:
+      name: "{{ map_2_name }}"
+      cleaning_repeats: !input map_2_cleaning_repeats
+      sweep_schedule: !input map_2_sweep_schedule
+      mop_schedule: !input map_2_mop_schedule
+      has_base_station: "{{ map_2_name == base_station_map }}"
+      segments: >
+        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_2' %}
+        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
+          {% set segments_raw = state_attr(map_entity, 'segments') %}
+          {% if rooms_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, room in rooms_raw.items() %}
+              {% if room.room_id is defined %}
+                {% set ns.ids = ns.ids + [room.room_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% elif segments_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, segment in segments_raw.items() %}
+              {% if segment.segment_id is defined %}
+                {% set ns.ids = ns.ids + [segment.segment_id] %}
+              {% else %}
+                {% set ns.ids = ns.ids + [key | int] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% else %}
+            []
+          {% endif %}
+        {% else %}
+          []
+        {% endif %}
+    map_3:
+      name: "{{ map_3_name }}"
+      cleaning_repeats: !input map_3_cleaning_repeats
+      sweep_schedule: !input map_3_sweep_schedule
+      mop_schedule: !input map_3_mop_schedule
+      has_base_station: "{{ map_3_name == base_station_map }}"
+      segments: >
+        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_3' %}
+        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
+          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
+          {% set segments_raw = state_attr(map_entity, 'segments') %}
+          {% if rooms_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, room in rooms_raw.items() %}
+              {% if room.room_id is defined %}
+                {% set ns.ids = ns.ids + [room.room_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% elif segments_raw is not none %}
+            {% set ns = namespace(ids=[]) %}
+            {% for key, segment in segments_raw.items() %}
+              {% if segment.segment_id is defined %}
+                {% set ns.ids = ns.ids + [segment.segment_id] %}
+              {% else %}
+                {% set ns.ids = ns.ids + [key | int] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.ids }}
+          {% else %}
+            []
+          {% endif %}
+        {% else %}
+          []
+        {% endif %}
+
+  # ========================================
   # CLEANING SETTINGS
   # ========================================
   mode_sweeping: !input sweeping_mode_value
   mode_sweeping_mopping: !input sweeping_mopping_mode_value
-  repeats: !input cleaning_repeats
+  # Per-map cleaning repeats take priority, fall back to global setting
+  global_cleaning_repeats: !input global_cleaning_repeats
+  repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats, true) | default(2) }}"
   cleaning_states_raw: !input cleaning_states
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
   paused_state: !input paused_state
@@ -461,6 +897,81 @@ variables:
   undocking_timeout: !input undocking_timeout
   use_segment_service: !input use_segment_service
   debug_mode: !input debug_mode
+
+  # ========================================
+  # NOTIFICATION TEMPLATE VARIABLES
+  # ========================================
+  # Variables available in notification templates for flexible customization
+  robot_name: "{{ vacuum_base_name | replace('_', ' ') | title }}"
+
+  cleaning_mode_display: >
+    {% if current_mode == mode_sweeping %}Sweep Only
+    {% elif current_mode == mode_sweeping_mopping %}Sweep + Mop
+    {% else %}{{ current_mode }}{% endif %}
+
+  current_time: "{{ now().strftime('%H:%M') }}"
+
+  # Notification input imports
+  scheduled_notification_enabled: !input scheduled_notification_enabled
+  pickup_notification_enabled: !input pickup_notification_enabled
+
+  # ========================================
+  # SCHEDULE HANDLING & CONFLICT DETECTION
+  # ========================================
+  # Import schedule entity references
+  map_1_sweep_schedule_entity: !input map_1_sweep_schedule
+  map_1_mop_schedule_entity: !input map_1_mop_schedule
+  map_2_sweep_schedule_entity: !input map_2_sweep_schedule
+  map_2_mop_schedule_entity: !input map_2_mop_schedule
+  map_3_sweep_schedule_entity: !input map_3_sweep_schedule
+  map_3_mop_schedule_entity: !input map_3_mop_schedule
+
+  # Schedule state checks (empty string if not configured)
+  schedule_states: >
+    [
+      '{{ states(map_1_sweep_schedule_entity) if map_1_sweep_schedule_entity else "" }}',
+      '{{ states(map_1_mop_schedule_entity) if map_1_mop_schedule_entity else "" }}',
+      '{{ states(map_2_sweep_schedule_entity) if map_2_sweep_schedule_entity else "" }}',
+      '{{ states(map_2_mop_schedule_entity) if map_2_mop_schedule_entity else "" }}',
+      '{{ states(map_3_sweep_schedule_entity) if map_3_sweep_schedule_entity else "" }}',
+      '{{ states(map_3_mop_schedule_entity) if map_3_mop_schedule_entity else "" }}'
+    ]
+
+  # Detect if this is a schedule-triggered cleaning
+  is_schedule_trigger: >
+    {{ trigger.id is defined and trigger.id.startswith('schedule_') }}
+
+  # Conflict detection: Check if another schedule is already running
+  # Only 1 schedule can be active at a time (silent abort on conflict)
+  schedule_conflict_detected: >
+    {% if is_schedule_trigger %}
+      {# Check if robot is currently cleaning (excluding paused state) #}
+      {% set is_currently_cleaning = states(status_sensor) in cleaning_states and states(status_sensor) != paused_state %}
+      {{ is_currently_cleaning }}
+    {% else %}
+      false
+    {% endif %}
+
+  # Current schedule trigger info (for debugging and notification context)
+  schedule_trigger_map: >
+    {% if trigger.id == 'schedule_map1_sweep' %}1
+    {% elif trigger.id == 'schedule_map1_mop' %}1
+    {% elif trigger.id == 'schedule_map2_sweep' %}2
+    {% elif trigger.id == 'schedule_map2_mop' %}2
+    {% elif trigger.id == 'schedule_map3_sweep' %}3
+    {% elif trigger.id == 'schedule_map3_mop' %}3
+    {% else %}unknown{% endif %}
+
+  schedule_trigger_mode: >
+    {% if trigger.id in ['schedule_map1_sweep', 'schedule_map2_sweep', 'schedule_map3_sweep'] %}sweep
+    {% elif trigger.id in ['schedule_map1_mop', 'schedule_map2_mop', 'schedule_map3_mop'] %}mop
+    {% else %}unknown{% endif %}
+
+  schedule_trigger_map_name: >
+    {% if schedule_trigger_map == '1' %}{{ map_1_name }}
+    {% elif schedule_trigger_map == '2' %}{{ map_2_name }}
+    {% elif schedule_trigger_map == '3' %}{{ map_3_name }}
+    {% else %}Unknown{% endif %}
 
   # ========================================
   # FUNCTION ROUTING (Hybrid: ID, Device Trigger, or MQTT Payload)
@@ -500,8 +1011,24 @@ variables:
   current_map_name: "{{ states(selected_map_select) }}"
   current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
 
-  # Boolean Evaluations
-  is_base_station_map: "{{ current_map_name == base_station_map }}"
+  # ========================================
+  # CURRENT MAP CONTEXT (Dynamic Lookup)
+  # ========================================
+  # Dynamically select map config based on current_map_name
+  # Used throughout actions for per-map behavior
+  current_map_config: >
+    {% if current_map_name == map_1_name %}
+      {{ map_config.map_1 }}
+    {% elif current_map_name == map_2_name %}
+      {{ map_config.map_2 }}
+    {% elif current_map_name == map_3_name %}
+      {{ map_config.map_3 }}
+    {% else %}
+      {{ map_config.map_1 }}
+    {% endif %}
+
+  # Boolean Evaluations (backward-compatible with per-map config)
+  is_base_station_map: "{{ current_map_config.has_base_station | default(current_map_name == base_station_map) }}"
   is_cleaning: "{{ current_status in cleaning_states }}"
   is_paused: "{{ current_status == paused_state }}"
 
@@ -541,13 +1068,18 @@ variables:
       []
     {% endif %}
 
-  # Use rooms if available, otherwise use segments
-  map_segments: >
+  # Use rooms if available, otherwise use segments (legacy support)
+  # NOTE: This is now deprecated in favor of current_map_config.segments
+  # Kept for backward compatibility with actions not yet updated
+  map_segments_legacy: >
     {% if room_ids | length > 0 %}
       {{ room_ids }}
     {% else %}
       {{ segment_ids }}
     {% endif %}
+
+  # NEW: Use per-map segments from map_config (dynamic lookup)
+  map_segments: "{{ current_map_config.segments | default(map_segments_legacy, true) | default([]) }}"
 
   has_segments: "{{ map_segments | length > 0 }}"
   segments_source: >
@@ -603,6 +1135,43 @@ actions:
             **Source:** {{ segments_source }}
             **Room/Segment Count:** {{ map_segments | length }}
             **Room/Segment IDs:** {{ map_segments }}
+
+            **--- Per-Map Configuration (v0.3.3 - Schedule Integration) ---**
+            **Current Map Config:**
+            • Map Name: {{ current_map_config.name }}
+            • Cleaning Repeats: {{ current_map_config.cleaning_repeats }}
+            • Has Base Station: {{ current_map_config.has_base_station }}
+            • Segments: {{ current_map_config.segments }}
+            • Sweep Schedule: {{ current_map_config.sweep_schedule }}
+            • Mop Schedule: {{ current_map_config.mop_schedule }}
+
+            **All Map Configs:**
+            • Map 1: {{ map_config.map_1.name }} (Repeats: {{ map_config.map_1.cleaning_repeats }}, Has Base: {{ map_config.map_1.has_base_station }}, Sweep: {{ map_config.map_1.sweep_schedule }}, Mop: {{ map_config.map_1.mop_schedule }})
+            • Map 2: {{ map_config.map_2.name }} (Repeats: {{ map_config.map_2.cleaning_repeats }}, Has Base: {{ map_config.map_2.has_base_station }}, Sweep: {{ map_config.map_2.sweep_schedule }}, Mop: {{ map_config.map_2.mop_schedule }})
+            • Map 3: {{ map_config.map_3.name }} (Repeats: {{ map_config.map_3.cleaning_repeats }}, Has Base: {{ map_config.map_3.has_base_station }}, Sweep: {{ map_config.map_3.sweep_schedule }}, Mop: {{ map_config.map_3.mop_schedule }})
+
+            **--- Schedule Information (v0.3.3) ---**
+            **Schedule Trigger Detection:**
+            • Is Schedule Trigger: {{ is_schedule_trigger }}
+            • Schedule Conflict Detected: {{ schedule_conflict_detected }}
+            {% if is_schedule_trigger %}
+            **Schedule Trigger Details:**
+            • Map: {{ schedule_trigger_map_name }}
+            • Mode: {{ schedule_trigger_mode }}
+            • Trigger ID: {{ trigger.id }}
+            {% endif %}
+
+            **Schedule States:**
+            • Map 1 Sweep: {{ states(map_1_sweep_schedule_entity) if map_1_sweep_schedule_entity else 'Not configured' }}
+            • Map 1 Mop: {{ states(map_1_mop_schedule_entity) if map_1_mop_schedule_entity else 'Not configured' }}
+            • Map 2 Sweep: {{ states(map_2_sweep_schedule_entity) if map_2_sweep_schedule_entity else 'Not configured' }}
+            • Map 2 Mop: {{ states(map_2_mop_schedule_entity) if map_2_mop_schedule_entity else 'Not configured' }}
+            • Map 3 Sweep: {{ states(map_3_sweep_schedule_entity) if map_3_sweep_schedule_entity else 'Not configured' }}
+            • Map 3 Mop: {{ states(map_3_mop_schedule_entity) if map_3_mop_schedule_entity else 'Not configured' }}
+
+            **Notification Configuration:**
+            • Scheduled Notifications Enabled: {{ scheduled_notification_enabled }}
+            • Pickup Notifications Enabled: {{ pickup_notification_enabled }}
 
   # ========================================
   # MAIN LOGIC - Function Routing (by trigger.id)
@@ -1067,6 +1636,689 @@ actions:
                 data:
                   title: "🗺️ Map Changed"
                   message: "New Map: **{{ map_3_name }}**"
+
+      # ========================================
+      # SCHEDULE-TRIGGERED CLEANING FUNCTIONS
+      # ========================================
+      # These functions are triggered by schedule entities (state: "on")
+      # Workflow:
+      # 1. Conflict check (abort if already cleaning)
+      # 2. If map has base station → Start cleaning immediately
+      # 3. If map WITHOUT base station → Send notification, wait for user action
+
+      # ========================================
+      # SCHEDULE 1: Map 1 Sweep Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map1_sweep' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 1 Sweep schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping }}"
+
+          # Switch to Map 1
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_1_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_1_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 1 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_1.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_1.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_1.segments }}"
+                              repeats: "{{ map_config.map_1.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 1 Sweep Started"
+                          message: "Cleaning started on base station map: {{ map_1_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 1 Sweep"
+                      message: "Map {{ map_1_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 1 (Sweep)"
+
+      # ========================================
+      # SCHEDULE 2: Map 1 Mop Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map1_mop' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 1 Mop schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep + Mop
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping_mopping }}"
+
+          # Switch to Map 1
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_1_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_1_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 1 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_1.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_1.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_1.segments }}"
+                              repeats: "{{ map_config.map_1.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 1 Mop Started"
+                          message: "Cleaning started on base station map: {{ map_1_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 1 Mop"
+                      message: "Map {{ map_1_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 1 (Mop)"
+
+      # ========================================
+      # SCHEDULE 3: Map 2 Sweep Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map2_sweep' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 2 Sweep schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping }}"
+
+          # Switch to Map 2
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_2_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_2_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 2 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_2.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_2.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_2.segments }}"
+                              repeats: "{{ map_config.map_2.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 2 Sweep Started"
+                          message: "Cleaning started on base station map: {{ map_2_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 2 Sweep"
+                      message: "Map {{ map_2_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 2 (Sweep)"
+
+      # ========================================
+      # SCHEDULE 4: Map 2 Mop Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map2_mop' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 2 Mop schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep + Mop
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping_mopping }}"
+
+          # Switch to Map 2
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_2_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_2_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 2 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_2.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_2.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_2.segments }}"
+                              repeats: "{{ map_config.map_2.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 2 Mop Started"
+                          message: "Cleaning started on base station map: {{ map_2_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 2 Mop"
+                      message: "Map {{ map_2_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 2 (Mop)"
+
+      # ========================================
+      # SCHEDULE 5: Map 3 Sweep Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map3_sweep' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 3 Sweep schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping }}"
+
+          # Switch to Map 3
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_3_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_3_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 3 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_3.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_3.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_3.segments }}"
+                              repeats: "{{ map_config.map_3.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 3 Sweep Started"
+                          message: "Cleaning started on base station map: {{ map_3_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 3 Sweep"
+                      message: "Map {{ map_3_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 3 (Sweep)"
+
+      # ========================================
+      # SCHEDULE 6: Map 3 Mop Schedule
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'schedule_map3_mop' }}"
+        sequence:
+          # Conflict detection: Abort if already cleaning
+          - if:
+              - condition: template
+                value_template: "{{ schedule_conflict_detected }}"
+            then:
+              - if:
+                  - condition: template
+                    value_template: "{{ debug_mode }}"
+                then:
+                  - action: persistent_notification.create
+                    data:
+                      title: "⚠️ Schedule Conflict Detected"
+                      message: "Map 3 Mop schedule skipped - robot is already cleaning."
+              - stop: "Schedule conflict - robot already cleaning"
+
+          # Set cleaning mode to Sweep + Mop
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ mode_sweeping_mopping }}"
+
+          # Switch to Map 3
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ map_3_name }}"
+
+          # Wait for map switch
+          - wait_template: "{{ states(selected_map_select) == map_3_name }}"
+            timeout: 30
+            continue_on_timeout: false
+
+          # Check if Map 3 has base station
+          - choose:
+              # Case A: Map has base station → Start cleaning immediately
+              - conditions:
+                  - condition: template
+                    value_template: "{{ map_config.map_3.has_base_station }}"
+                sequence:
+                  # Start cleaning (segment-based if available)
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ use_segment_service and map_config.map_3.segments | length > 0 }}"
+                        sequence:
+                          - action: dreame_vacuum.vacuum_clean_segment
+                            target:
+                              entity_id: "{{ vacuum_entity }}"
+                            data:
+                              segments: "{{ map_config.map_3.segments }}"
+                              repeats: "{{ map_config.map_3.cleaning_repeats }}"
+                    default:
+                      - action: vacuum.start
+                        target:
+                          entity_id: "{{ vacuum_entity }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "✅ Schedule: Map 3 Mop Started"
+                          message: "Cleaning started on base station map: {{ map_3_name }}"
+
+            # Case B: Map WITHOUT base station → Send notification
+            default:
+              - if:
+                  - condition: template
+                    value_template: "{{ scheduled_notification_enabled }}"
+                then:
+                  # TODO: Send scheduled cleaning notification with prepare button
+                  # This will be implemented with repeat logic
+                  - action: persistent_notification.create
+                    data:
+                      title: "📅 Scheduled Cleaning Ready: Map 3 Mop"
+                      message: "Map {{ map_3_name }} has no base station. Please prepare robot for transport."
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🔔 Scheduled Notification Sent"
+                          message: "Waiting for user to prepare robot for Map 3 (Mop)"
+
+      # ========================================
+      # NOTIFICATION ACTION HANDLERS
+      # ========================================
+      # These handle user responses from notification action buttons
+
+      # ========================================
+      # NOTIFICATION ACTION: Prepare Robot
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'notification_prepare' }}"
+        sequence:
+          # TODO: Implement preparation process
+          # 1. Start robot cleaning
+          # 2. Wait for cleaning state
+          # 3. Pause robot for transport
+          # 4. Send pickup notification
+          - action: persistent_notification.create
+            data:
+              title: "🔄 Preparing Robot"
+              message: "Starting preparation process... (Implementation pending)"
+
+      # ========================================
+      # NOTIFICATION ACTION: Skip Cleaning
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'notification_skip' }}"
+        sequence:
+          # Skip this scheduled cleaning - no action needed
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⏭️ Scheduled Cleaning Skipped"
+                  message: "User skipped scheduled cleaning via notification button."
+
+      # ========================================
+      # NOTIFICATION ACTION: Start Cleaning
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'notification_start' }}"
+        sequence:
+          # Resume cleaning after transport
+          - action: vacuum.start
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "▶️ Cleaning Resumed"
+                  message: "Robot resumed cleaning after transport."
+
+      # ========================================
+      # NOTIFICATION ACTION: Cancel Cleaning
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'notification_cancel' }}"
+        sequence:
+          # Check if robot is on base station map
+          - choose:
+              # If NOT on base station map, switch to it
+              - conditions:
+                  - condition: template
+                    value_template: "{{ current_map_name != base_station_map }}"
+                sequence:
+                  - action: select.select_option
+                    target:
+                      entity_id: "{{ selected_map_select }}"
+                    data:
+                      option: "{{ base_station_map }}"
+
+                  - wait_template: "{{ states(selected_map_select) == base_station_map }}"
+                    timeout: 30
+                    continue_on_timeout: true
+
+          # Return to dock
+          - action: vacuum.return_to_base
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "🏠 Returning to Base"
+                  message: "Robot cancelled cleaning and returning to base station."
 
     # Default: Unknown trigger ID (should not happen)
     default:

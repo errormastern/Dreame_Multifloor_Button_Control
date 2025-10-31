@@ -1,29 +1,43 @@
 # Dreame Vacuum - Multifloor Control
 
-[![Version](https://img.shields.io/badge/version-0.2.9-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.3.3-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
 
-> **The Problem**: Cleaning floors without a base station via Xiaomi Home App requires multiple tedious manual steps: switching maps, enabling self-clean for mop moistening and tank filling, starting cleaning, waiting for the robot to leave the station, pausing, transporting the robot upstairs, disabling self-clean, resuming...
+> **The Problem**: Cleaning floors without a base station requires tedious manual steps: switching maps, starting cleaning, waiting, pausing, transporting upstairs, resuming... Time-based automation makes it worse - you must be home to manually transport the robot.
 >
-> **The Solution**: This blueprint automates the entire preparation workflow. One trigger starts the robot, runs the preparation program (mop moistening, tank filling), moves it to the transport waiting position, and pauses ready for pickup. Simple automation for everyday use.
+> **The Solution**: This blueprint combines schedule integration with notification-based preparation. Maps with base station clean automatically at scheduled times. Maps without base station send notifications with action buttons - you start preparation when ready, then receive pickup notification when robot is paused. Full automation meets real-world flexibility.
 
 ## Features
 
+### Core Functionality
 - **Zero configuration** - Select vacuum entity, everything else auto-detected
-- **Flexible triggers** - Any Home Assistant trigger (buttons, schedules, presence, etc.)
+- **Per-map schedules** - Separate sweep/mop schedules for each map (3 maps supported)
+- **Automatic base station detection** - Maps with base station start automatically
+- **Notification workflow** - Maps without base station send preparation notifications with action buttons
+- **Flexible triggers** - Any Home Assistant trigger (buttons, schedules, presence, etc.) for manual control
 - **Intelligent preparation workflow** - Automatic mop moistening and tank filling for non-base station maps
 - **Smart undocking** - Configurable delay for optimal transport position
-- **Mode & map switching** - Sweep-only vs. sweep+mop, up to 3 maps
-- **Segment cleaning** - Room-based cleaning with configurable repeats
+- **Segment cleaning** - Room-based cleaning with configurable repeats per map
 - **Debug mode** - Timing measurements and step-by-step execution tracking
+
+### Schedule Integration
+- **Per-map sweep + mop schedules** - 6 schedules total (sweep/mop for each of 3 maps)
+- **Conflict detection** - Only 1 schedule runs at a time (silent abort on conflict)
+- **Smart automation**:
+  - Maps **with** base station → Start cleaning automatically at scheduled time
+  - Maps **without** base station → Send notification with "Prepare Robot" button
+- **Template-based notifications** - Customize title/message with 9 available variables
+- **Action buttons** - "Prepare Robot", "Skip Cleaning", "Start Cleaning", "Cancel Cleaning"
+- **Repeat notifications** - Configurable repeat count (1-3) and interval (0-240 min)
 
 ## Requirements
 
 - Home Assistant ≥ 2024.10.0
 - [Dreame Vacuum Integration](https://github.com/Tasshack/dreame-vacuum) ≥ v2.0.0b19
 - At least one saved map configured in robot
+- Optional: Schedule Helpers for time-based automation
 
 ## Installation
 
@@ -40,7 +54,63 @@ Or manually: **Settings** → **Automations & Scenes** → **Blueprints** → **
 
 All related entities (status, mode, map, camera) are auto-detected.
 
-## Functions & Triggers
+## Schedule Setup (v0.3.3+)
+
+Configure time-based automated cleaning with per-map schedules.
+
+### Step 1: Create Schedule Helpers
+
+1. Go to **Settings** → **Devices & Services** → **Helpers**
+2. Click **Create Helper** → **Schedule**
+3. Create schedules as needed:
+   - `Map 1 Sweep Schedule` (e.g., Mon-Fri 09:00)
+   - `Map 1 Mop Schedule` (e.g., Wed 14:00)
+   - `Map 2 Sweep Schedule` (e.g., Tue/Thu 10:00)
+   - etc.
+
+### Step 2: Assign Schedules to Maps
+
+1. Edit your blueprint automation
+2. Expand **Map 1/2/3 Configuration** sections
+3. Select schedule entities:
+   - **Sweep Schedule**: Schedule for sweep-only cleaning
+   - **Mop Schedule**: Schedule for sweep+mop cleaning
+4. Leave empty if you don't want schedules for that map
+5. Save
+
+### Step 3: Configure Notifications (Optional)
+
+Only needed for maps **without** base station:
+
+1. Expand **Scheduled Cleaning Notifications**
+2. Enable notifications
+3. Select notification service (e.g., `notify.mobile_app_iphone`)
+4. Customize title/message with template variables:
+   - `{{ robot_name }}` - Robot name
+   - `{{ map_name }}` - Target map
+   - `{{ cleaning_mode_display }}` - "Sweep Only" or "Sweep + Mop"
+   - See full variable list in blueprint description
+5. Configure repeat settings (optional)
+6. Repeat for **Pickup Notifications**
+7. Save
+
+### How It Works
+
+**Maps WITH base station:**
+- Schedule triggers → Robot starts cleaning automatically
+- No notifications sent
+
+**Maps WITHOUT base station:**
+1. Schedule triggers → "Scheduled Cleaning Ready" notification
+2. Press "Prepare Robot" → Robot starts cleaning, then auto-pauses
+3. "Robot Ready for Transport" notification → Pick up robot
+4. Press "Start Cleaning" after transport → Robot resumes cleaning
+
+**Conflict Detection:**
+- Only 1 schedule can run at a time
+- If robot is already cleaning, new schedules abort silently
+
+## Manual Control Functions
 
 Each function can use any Home Assistant trigger. For **MQTT/Device triggers** (e.g., Zigbee2MQTT buttons), action values are auto-detected. For **State/Event triggers**, set the Trigger ID manually in advanced options.
 
@@ -58,10 +128,6 @@ Each function can use any Home Assistant trigger. For **MQTT/Device triggers** (
 trigger: mqtt
 topic: zigbee2mqtt/vacuum_button
 
-# Schedule (start cleaning every morning)
-trigger: time
-at: "08:00:00"
-
 # Presence (start when everyone leaves)
 trigger: state
 entity_id: group.all_persons
@@ -72,6 +138,8 @@ trigger: state
 entity_id: input_button.vacuum_start
 # ⚠️ Set Trigger ID to "fn_start" in advanced options
 ```
+
+**Note:** Time-based triggers are now configured via Schedule Helpers (see [Schedule Setup](#schedule-setup-v033) above), not as manual triggers.
 
 ## Smart Start Workflow
 
