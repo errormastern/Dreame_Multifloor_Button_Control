@@ -125,8 +125,8 @@ blueprint:
 
         map_1_sweep_schedule:
           name: "Sweep-Only Schedule (Optional)"
-          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -134,8 +134,8 @@ blueprint:
 
         map_1_mop_schedule:
           name: "Sweep+Mop Schedule (Optional)"
-          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -171,8 +171,8 @@ blueprint:
 
         map_2_sweep_schedule:
           name: "Sweep-Only Schedule (Optional)"
-          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -180,8 +180,8 @@ blueprint:
 
         map_2_mop_schedule:
           name: "Sweep+Mop Schedule (Optional)"
-          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -217,8 +217,8 @@ blueprint:
 
         map_3_sweep_schedule:
           name: "Sweep-Only Schedule (Optional)"
-          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep-only cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -226,8 +226,8 @@ blueprint:
 
         map_3_mop_schedule:
           name: "Sweep+Mop Schedule (Optional)"
-          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave empty to disable scheduled cleaning."
-          default: ""
+          description: "Schedule helper for automatic sweep+mop cleaning on this map. Create schedule helper first, then select here. Leave as default (none) to disable scheduled cleaning."
+          default: "none"
           selector:
             entity:
               filter:
@@ -1652,6 +1652,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map1_sweep' }}"
+          - condition: template
+            value_template: "{{ map_1_sweep_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
@@ -1748,6 +1750,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map1_mop' }}"
+          - condition: template
+            value_template: "{{ map_1_mop_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
@@ -1844,6 +1848,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map2_sweep' }}"
+          - condition: template
+            value_template: "{{ map_2_sweep_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
@@ -1940,6 +1946,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map2_mop' }}"
+          - condition: template
+            value_template: "{{ map_2_mop_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
@@ -2036,6 +2044,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map3_sweep' }}"
+          - condition: template
+            value_template: "{{ map_3_sweep_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
@@ -2132,6 +2142,8 @@ actions:
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'schedule_map3_mop' }}"
+          - condition: template
+            value_template: "{{ map_3_mop_schedule_entity != 'none' }}"
         sequence:
           # Conflict detection: Abort if already cleaning
           - if:
