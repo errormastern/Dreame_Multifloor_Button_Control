@@ -1,7 +1,7 @@
 blueprint:
   name: "Dreame Vacuum Multi-Button Control"
   description: >
-    **Version: 0.3.3 (Alpha - Schedule Integration)**
+    **Version: 0.3.4 (Alpha - Schedule Integration - Bugfix)**
 
 
     Multi-floor control for Dreame vacuum cleaners with schedule integration and notification-based preparation workflow.
@@ -24,7 +24,7 @@ blueprint:
     • Room/segment cleaning with configurable repeat counts per map
 
 
-    **Schedule Integration (NEW in v0.3.3):**
+    **Schedule Integration (v0.3.3+):**
 
     • Per-map sweep + mop schedules (6 schedules total)
 
@@ -768,116 +768,50 @@ variables:
   # ========================================
   # PER-MAP CONFIGURATION STRUCTURE
   # ========================================
-  # Structured configuration for each map with auto-detected features
-  # Used for dynamic per-map behavior based on current_map_name
+  # Simple per-map configuration without complex segment pre-calculation
+  # Segments are extracted dynamically from current map camera (lazy evaluation)
+  # This prevents template rendering errors when camera entities are unavailable
   map_config:
     map_1:
       name: "{{ map_1_name }}"
       cleaning_repeats: !input map_1_cleaning_repeats
       sweep_schedule: !input map_1_sweep_schedule
       mop_schedule: !input map_1_mop_schedule
-      # Auto-detected: Base station presence
       has_base_station: "{{ map_1_name == base_station_map }}"
-      # Auto-detected: Available segments/rooms for this map
-      segments: >
-        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_1' %}
-        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
-          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
-          {% set segments_raw = state_attr(map_entity, 'segments') %}
-          {% if rooms_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, room in rooms_raw.items() %}
-              {% if room.room_id is defined %}
-                {% set ns.ids = ns.ids + [room.room_id] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% elif segments_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, segment in segments_raw.items() %}
-              {% if segment.segment_id is defined %}
-                {% set ns.ids = ns.ids + [segment.segment_id] %}
-              {% else %}
-                {% set ns.ids = ns.ids + [key | int] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% else %}
-            []
-          {% endif %}
-        {% else %}
-          []
-        {% endif %}
     map_2:
       name: "{{ map_2_name }}"
       cleaning_repeats: !input map_2_cleaning_repeats
       sweep_schedule: !input map_2_sweep_schedule
       mop_schedule: !input map_2_mop_schedule
       has_base_station: "{{ map_2_name == base_station_map }}"
-      segments: >
-        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_2' %}
-        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
-          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
-          {% set segments_raw = state_attr(map_entity, 'segments') %}
-          {% if rooms_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, room in rooms_raw.items() %}
-              {% if room.room_id is defined %}
-                {% set ns.ids = ns.ids + [room.room_id] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% elif segments_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, segment in segments_raw.items() %}
-              {% if segment.segment_id is defined %}
-                {% set ns.ids = ns.ids + [segment.segment_id] %}
-              {% else %}
-                {% set ns.ids = ns.ids + [key | int] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% else %}
-            []
-          {% endif %}
-        {% else %}
-          []
-        {% endif %}
     map_3:
       name: "{{ map_3_name }}"
       cleaning_repeats: !input map_3_cleaning_repeats
       sweep_schedule: !input map_3_sweep_schedule
       mop_schedule: !input map_3_mop_schedule
       has_base_station: "{{ map_3_name == base_station_map }}"
-      segments: >
-        {% set map_entity = 'camera.' ~ vacuum_base_name ~ '_map_3' %}
-        {% if states(map_entity) not in ['unknown', 'unavailable'] %}
-          {% set rooms_raw = state_attr(map_entity, 'rooms') %}
-          {% set segments_raw = state_attr(map_entity, 'segments') %}
-          {% if rooms_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, room in rooms_raw.items() %}
-              {% if room.room_id is defined %}
-                {% set ns.ids = ns.ids + [room.room_id] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% elif segments_raw is not none %}
-            {% set ns = namespace(ids=[]) %}
-            {% for key, segment in segments_raw.items() %}
-              {% if segment.segment_id is defined %}
-                {% set ns.ids = ns.ids + [segment.segment_id] %}
-              {% else %}
-                {% set ns.ids = ns.ids + [key | int] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.ids }}
-          {% else %}
-            []
-          {% endif %}
-        {% else %}
-          []
-        {% endif %}
+
+  # ========================================
+  # ENTITY STATE CHECKS
+  # ========================================
+  # IMPORTANT: These must come BEFORE variables that use them (like repeats, cleaning_mode_display)
+  current_status: "{{ states(status_sensor) }}"
+  current_mode: "{{ states(cleaning_mode_select) }}"
+  current_map_name: "{{ states(selected_map_select) }}"
+  current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
+
+  # ========================================
+  # CURRENT MAP CONTEXT (Dynamic Lookup)
+  # ========================================
+  # Dynamically select map config based on current_map_name
+  # Robust with fallbacks to prevent undefined errors
+  # IMPORTANT: Must come BEFORE variables that use it (like repeats, is_base_station_map)
+  current_map_config: "{{ map_config.map_1 if current_map_name == map_1_name else (map_config.map_2 if current_map_name == map_2_name else (map_config.map_3 if current_map_name == map_3_name else map_config.map_1)) }}"
+
+  # Boolean Evaluations with robust defaults
+  is_base_station_map: "{{ current_map_config.has_base_station | default(false) if current_map_config is mapping else (current_map_name == base_station_map) }}"
+  is_cleaning: "{{ current_status in cleaning_states }}"
+  is_paused: "{{ current_status == paused_state }}"
 
   # ========================================
   # CLEANING SETTINGS
@@ -886,7 +820,7 @@ variables:
   mode_sweeping_mopping: !input sweeping_mopping_mode_value
   # Per-map cleaning repeats take priority, fall back to global setting
   global_cleaning_repeats: !input global_cleaning_repeats
-  repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats, true) | default(2) }}"
+  repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
   cleaning_states_raw: !input cleaning_states
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
   paused_state: !input paused_state
@@ -1003,35 +937,6 @@ variables:
       {% else %}unknown{% endif %}
     {% else %}unknown{% endif %}
 
-  # ========================================
-  # ENTITY STATE CHECKS
-  # ========================================
-  current_status: "{{ states(status_sensor) }}"
-  current_mode: "{{ states(cleaning_mode_select) }}"
-  current_map_name: "{{ states(selected_map_select) }}"
-  current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
-
-  # ========================================
-  # CURRENT MAP CONTEXT (Dynamic Lookup)
-  # ========================================
-  # Dynamically select map config based on current_map_name
-  # Used throughout actions for per-map behavior
-  current_map_config: >
-    {% if current_map_name == map_1_name %}
-      {{ map_config.map_1 }}
-    {% elif current_map_name == map_2_name %}
-      {{ map_config.map_2 }}
-    {% elif current_map_name == map_3_name %}
-      {{ map_config.map_3 }}
-    {% else %}
-      {{ map_config.map_1 }}
-    {% endif %}
-
-  # Boolean Evaluations (backward-compatible with per-map config)
-  is_base_station_map: "{{ current_map_config.has_base_station | default(current_map_name == base_station_map) }}"
-  is_cleaning: "{{ current_status in cleaning_states }}"
-  is_paused: "{{ current_status == paused_state }}"
-
   # Room/Segment Data Processing (Hybrid: supports both rooms and segments)
   # Priority 1: rooms (extract room_id values)
   # Priority 2: segments (extract segment_id or keys)
@@ -1068,18 +973,16 @@ variables:
       []
     {% endif %}
 
-  # Use rooms if available, otherwise use segments (legacy support)
-  # NOTE: This is now deprecated in favor of current_map_config.segments
-  # Kept for backward compatibility with actions not yet updated
-  map_segments_legacy: >
+  # Extract segments from current map camera (robust with fallbacks)
+  # Supports both 'rooms' (preferred) and 'segments' (fallback) attributes
+  map_segments: >
     {% if room_ids | length > 0 %}
       {{ room_ids }}
-    {% else %}
+    {% elif segment_ids | length > 0 %}
       {{ segment_ids }}
+    {% else %}
+      []
     {% endif %}
-
-  # NEW: Use per-map segments from map_config (dynamic lookup)
-  map_segments: "{{ current_map_config.segments | default(map_segments_legacy, true) | default([]) }}"
 
   has_segments: "{{ map_segments | length > 0 }}"
   segments_source: >
@@ -1136,21 +1039,25 @@ actions:
             **Room/Segment Count:** {{ map_segments | length }}
             **Room/Segment IDs:** {{ map_segments }}
 
-            **--- Per-Map Configuration (v0.3.3 - Schedule Integration) ---**
+            **--- Per-Map Configuration (v0.3.3+ - Schedule Integration) ---**
             **Current Map Config:**
-            • Map Name: {{ current_map_config.name }}
-            • Cleaning Repeats: {{ current_map_config.cleaning_repeats }}
-            • Has Base Station: {{ current_map_config.has_base_station }}
-            • Segments: {{ current_map_config.segments }}
-            • Sweep Schedule: {{ current_map_config.sweep_schedule }}
-            • Mop Schedule: {{ current_map_config.mop_schedule }}
+            • Map Name: {{ current_map_config.name | default('Unknown') }}
+            • Cleaning Repeats: {{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) }}
+            • Has Base Station: {{ current_map_config.has_base_station | default(false) }}
+            • Sweep Schedule: {{ current_map_config.sweep_schedule | default('Not configured') }}
+            • Mop Schedule: {{ current_map_config.mop_schedule | default('Not configured') }}
 
             **All Map Configs:**
             • Map 1: {{ map_config.map_1.name }} (Repeats: {{ map_config.map_1.cleaning_repeats }}, Has Base: {{ map_config.map_1.has_base_station }}, Sweep: {{ map_config.map_1.sweep_schedule }}, Mop: {{ map_config.map_1.mop_schedule }})
             • Map 2: {{ map_config.map_2.name }} (Repeats: {{ map_config.map_2.cleaning_repeats }}, Has Base: {{ map_config.map_2.has_base_station }}, Sweep: {{ map_config.map_2.sweep_schedule }}, Mop: {{ map_config.map_2.mop_schedule }})
             • Map 3: {{ map_config.map_3.name }} (Repeats: {{ map_config.map_3.cleaning_repeats }}, Has Base: {{ map_config.map_3.has_base_station }}, Sweep: {{ map_config.map_3.sweep_schedule }}, Mop: {{ map_config.map_3.mop_schedule }})
 
-            **--- Schedule Information (v0.3.3) ---**
+            **Segments (Dynamically extracted from current map):**
+            • Segments: {{ map_segments }}
+            • Has Segments: {{ has_segments }}
+            • Source: {{ segments_source }}
+
+            **--- Schedule Information (v0.3.3+) ---**
             **Schedule Trigger Detection:**
             • Is Schedule Trigger: {{ is_schedule_trigger }}
             • Schedule Conflict Detected: {{ schedule_conflict_detected }}
@@ -1700,13 +1607,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_1.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_1.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_1.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
@@ -1798,13 +1705,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_1.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_1.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_1.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
@@ -1896,13 +1803,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_2.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_2.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_2.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
@@ -1994,13 +1901,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_2.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_2.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_2.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
@@ -2092,13 +1999,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_3.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_3.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_3.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
@@ -2190,13 +2097,13 @@ actions:
                   - choose:
                       - conditions:
                           - condition: template
-                            value_template: "{{ use_segment_service and map_config.map_3.segments | length > 0 }}"
+                            value_template: "{{ use_segment_service and has_segments }}"
                         sequence:
                           - action: dreame_vacuum.vacuum_clean_segment
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
-                              segments: "{{ map_config.map_3.segments }}"
+                              segments: "{{ map_segments }}"
                               repeats: "{{ map_config.map_3.cleaning_repeats }}"
                     default:
                       - action: vacuum.start
