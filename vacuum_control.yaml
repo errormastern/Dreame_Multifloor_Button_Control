@@ -1,65 +1,25 @@
 blueprint:
-  name: "Dreame Vacuum Multi-Button Control"
+  name: "🤖 Dreame Vacuum Multi-Button Control"
   description: >
     **Version: 0.3.6 (Alpha - Complete Notification System)**
 
+    Multi-floor control for Dreame vacuum cleaners. Supports scheduled cleaning with per-map configurations,
+    notification-based preparation workflow for maps without base stations, and manual button control.
 
-    Multi-floor control for Dreame vacuum cleaners with schedule integration and notification-based preparation workflow.
-
-
-    **Core Features:**
-
-    • Zero configuration - Select vacuum entity, all else auto-detected
-
-    • Per-map schedules - Separate sweep/mop schedules for each map (3 maps supported)
-
-    • Automatic base station detection - Maps with base station start automatically
-
-    • Notification workflow - Maps without base station send preparation notifications with action buttons
-
-    • Flexible triggers - MQTT, Device, State, or Event per function
-
-    • Intelligent start/pause/resume with base station detection
-
-    • Room/segment cleaning with configurable repeat counts per map
-
-
-    **Schedule Integration (v0.3.3+):**
-
-    • Per-map sweep + mop schedules (6 schedules total)
-
-    • Conflict detection - Only 1 schedule runs at a time
-
-    • Maps WITH base station → Start cleaning automatically
-
-    • Maps WITHOUT base station → Send notification with "Prepare Robot" button
-
-    • Template-based notifications with customizable messages and action buttons
-
-    • Repeat notifications (1-3 times, configurable interval)
-
-
-    **Manual Control Functions:**
-
-    • Mode switching (sweep only / sweep + mop)
-
-    • Smart start/pause/resume
-
-    • Map switching (Map 1, Map 2, Map 3)
-
+    **Main Features:**
+    • Auto-detection of vacuum entities (select vacuum, rest auto-detected)
+    • 📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)
+    • 🔔 Notification workflow with action buttons for transport preparation
+    • Manual control via MQTT, device triggers, state changes, or events
+    • Segment-based cleaning with configurable repeats
 
     **Requirements:**
-
     • Home Assistant ≥ 2024.10.0
-
     • Dreame Vacuum Integration ≥ v2.0.0b19
-
     • At least one saved map configured
+    • Optional: Schedule helpers for time-based automation
 
-    • Optional: Schedule Helpers for time-based automation
-
-
-    📖 [Documentation](https://github.com/errormastern/dreame-multifloor-control)
+    📖 [Full Documentation](https://github.com/errormastern/dreame-multifloor-control)
   domain: automation
   homeassistant:
     min_version: 2024.10.0
