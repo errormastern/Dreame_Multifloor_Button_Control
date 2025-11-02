@@ -634,7 +634,7 @@ blueprint:
     # SECTION F: LOCALIZATION
     # ========================================
     localization_config:
-      name: "🌐 Localization"
+      name: "Localization"
       description: |
         Customize display texts for notifications and buttons.
         Perfect for non-English Home Assistant installations.
@@ -974,19 +974,20 @@ triggers:
     id: notification_cancel
 
   # ========================================
-  # EMERGENCY WATCH TRIGGER
+  # EMERGENCY WATCH TRIGGER (TEMPORARILY DISABLED - DEBUGGING)
   # ========================================
   # Monitors for unexpected cleaning starts outside our workflow
   # Validates map selection and pauses if incorrect
-  - trigger: state
-    entity_id: !input vacuum_entity
-    attribute: status
-    to:
-      - "room_cleaning"
-      - "sweeping"
-      - "mopping"
-      - "sweeping_and_mopping"
-    id: emergency_watch
+  # DISABLED: Attribute trigger may be blocking all automation triggers
+  # - trigger: state
+  #   entity_id: !input vacuum_entity
+  #   attribute: status
+  #   to:
+  #     - "room_cleaning"
+  #     - "sweeping"
+  #     - "mopping"
+  #     - "sweeping_and_mopping"
+  #   id: emergency_watch
 
 # ========================================
 # VARIABLEN
@@ -1259,9 +1260,9 @@ variables:
   segments_source: "{{ 'rooms' if room_ids | length > 0 else ('segments' if segment_ids | length > 0 else 'none') }}"
 
 # ========================================
-# ACTIONS
+# ACTION
 # ========================================
-actions:
+action:
   # ========================================
   # Debug Notification (optional)
   # ========================================
