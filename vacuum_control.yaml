@@ -1,10 +1,10 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.3.11 (Alpha - Self-Wash Base Undocking Detection)**
+    **Version: 0.3.14 (Alpha - Customized Cleaning Fix)**
 
-    Multi-floor control for Dreame vacuum cleaners. Supports scheduled cleaning with per-map configurations,
-    notification-based preparation workflow for maps without base stations, and manual button control.
+    Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
+    Intelligent customized_cleaning management enables reliable mode setting across all maps.
 
     **Main Features:**
     • Auto-detection of vacuum entities (select vacuum, rest auto-detected)
@@ -53,7 +53,8 @@ blueprint:
             Wait time after robot leaves charging station before pausing for manual transport.
 
             • **0s:** Immediate pause
-            • **2-3s:** Recommended (robot moves ~10cm from station for easier pickup)
+            • **1s:** Recommended (robot already ~10cm away after undocking)
+            • **2-5s:** Extended delay for slower undocking
 
             Only applies to non-base station maps.
           selector:
@@ -63,7 +64,7 @@ blueprint:
               step: 0.1
               unit_of_measurement: "s"
               mode: slider
-          default: 2.0
+          default: 1.0
 
     # ========================================
     # MAP 1 CONFIGURATION
@@ -2395,6 +2396,15 @@ actions:
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 1 Sweep
       # ========================================
+      # Preparation workflow for maps without base station (Sweep Only)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (for consistency)
+      # 3. Set cleaning mode
+      # 4. [SKIP mop washing - sweep-only mode]
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map1_sweep' }}"
@@ -2405,123 +2415,129 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_1.cleaning_repeats }}"
               schedule_label: "Map 1 Sweep"
 
-          # Debug: Show parameters
+          # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map1_sweep"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
-          # Step 1: Set Selected Map FIRST (may wake robot if sleeping)
-          - action: select.select_option
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ [SKIP mop washing - sweep mode]
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
             target:
-              entity_id: "{{ selected_map_select }}"
-            data:
-              option: "{{ notification_target_map_name }}"
-
-          # Step 2: Wait for Map Change (STATUS-BASED)
-          - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
-            timeout: 30
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
             continue_on_timeout: false
 
-          # Step 3: Safety Delay (Robot internal restart after map change)
-          - delay:
-              seconds: 10
+          # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
-          # Step 4: Set Cleaning Mode (robot should be awake now)
+          # Step 3: Set cleaning mode
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
 
-          # Step 5: Extract segments from current map
+          # Step 4: [SKIP mop washing - this is sweep-only mode]
+
+          # Step 5: Extract segments & start cleaning
           - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
                 {% else %}
                   []
                 {% endif %}
 
-          # Debug: Confirm map change complete
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-
-          # Step 6: Enable self_clean for sweep+mop mode (for moistening)
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-
-          # Step 7: Start cleaning (segment-based if available)
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
               - action: vacuum.start
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 8: Wait for cleaning status
+          # Step 6: Wait for cleaning state & pause
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
+            timeout: 120
             continue_on_timeout: false
-
-          # Step 9: Wait for self-wash base workflow (only for sweep+mop)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for washing to start (mop moistening begins)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-
-              # Wait for washing to complete (idle = robot starts driving out)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-
-              # Wait for robot to drive out from station (~2.5s tested)
-              - delay:
-                  seconds: 3
-
-          # Step 12: Pause for manual transport
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
 
-          # Step 13: Disable self_clean after pause
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+          # Step 7: Switch to target map
+          - action: select.select_option
+            target:
+              entity_id: "{{ selected_map_select }}"
+            data:
+              option: "{{ notification_target_map_name }}"
+          - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
+            timeout: 30
+            continue_on_timeout: false
 
-          # Step 14: Send pickup notification with action buttons
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification with action buttons
           - if: "{{ pickup_notification_enabled }}"
             then:
               # Define template variables for notification
@@ -2552,21 +2568,44 @@ actions:
                           "{{ pickup_notification_sound }}"
                         {% endif %}
 
-          # Debug notification
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map1_sweep"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ⏭️ [SKIP mop washing - sweep mode]
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 1 Mop
       # ========================================
+      # Preparation workflow for maps without base station (Sweep & Mop)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (prevents auto-return during cleaning)
+      # 3. Set cleaning mode
+      # 4. Manual mop washing with button press
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map1_mop' }}"
@@ -2581,13 +2620,106 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map1_mop"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ Manual mop washing (~3min)
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
+            continue_on_timeout: false
+
+          # Step 2: Save & disable self_clean (prevents auto-return during cleaning)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 3: Set cleaning mode
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 4: Manual mop washing (controlled preparation)
+          - action: button.press
+            target:
+              entity_id: "button.{{ vacuum_base_name }}_self_clean"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
+            timeout: 60
+            continue_on_timeout: false
+          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+            timeout: 180
+            continue_on_timeout: false
+
+          # Step 5: Extract segments & start cleaning
+          - variables:
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
+                {% else %}
+                  []
+                {% endif %}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
+              - action: vacuum.start
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+          # Step 6: Wait for cleaning state & pause
+          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+            timeout: 120
+            continue_on_timeout: false
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          # Step 7: Switch to target map
           - action: select.select_option
             target:
               entity_id: "{{ selected_map_select }}"
@@ -2596,80 +2728,27 @@ actions:
           - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
             timeout: 30
             continue_on_timeout: false
-          - delay:
-              seconds: 3
+
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
-          - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
-                {% else %}
-                  []
-                {% endif %}
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
-              - action: vacuum.start
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
-            continue_on_timeout: false
-          # Wait for self-wash base workflow (sweep+mop only)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for mop moistening to start
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-              # Wait until washing complete (robot starts driving)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-              # Wait for robot to exit station (~2.5s tested)
-              - delay:
-                  seconds: 3
-          - action: vacuum.pause
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
             target:
-              entity_id: "{{ vacuum_entity }}"
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification
           - if: "{{ pickup_notification_enabled }}"
             then:
-              # Define template variables for notification
               - variables:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
@@ -2695,20 +2774,45 @@ actions:
                         {% else %}
                           "{{ pickup_notification_sound }}"
                         {% endif %}
+
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map1_mop"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ✅ Mops washed & tank filled
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 2 Sweep
       # ========================================
+      # Preparation workflow for maps without base station (Sweep Only)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (for consistency)
+      # 3. Set cleaning mode
+      # 4. [SKIP mop washing - sweep-only mode]
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map2_sweep' }}"
@@ -2719,17 +2823,102 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_2.cleaning_repeats }}"
               schedule_label: "Map 2 Sweep"
 
+          # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map2_sweep"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ [SKIP mop washing - sweep mode]
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
+            continue_on_timeout: false
+
+          # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 3: Set cleaning mode
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 4: [SKIP mop washing - this is sweep-only mode]
+
+          # Step 5: Extract segments & start cleaning
+          - variables:
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
+                {% else %}
+                  []
+                {% endif %}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
+              - action: vacuum.start
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+          # Step 6: Wait for cleaning state & pause
+          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+            timeout: 120
+            continue_on_timeout: false
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          # Step 7: Switch to target map
           - action: select.select_option
             target:
               entity_id: "{{ selected_map_select }}"
@@ -2738,77 +2927,25 @@ actions:
           - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
             timeout: 30
             continue_on_timeout: false
-          - delay:
-              seconds: 3
+
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
-          - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
-                {% else %}
-                  []
-                {% endif %}
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
-              - action: vacuum.start
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
-            continue_on_timeout: false
-          # Wait for self-wash base workflow (sweep+mop only)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for mop moistening to start
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-              # Wait until washing complete (robot starts driving)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-              # Wait for robot to exit station (~2.5s tested)
-              - delay:
-                  seconds: 3
-          - action: vacuum.pause
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
             target:
-              entity_id: "{{ vacuum_entity }}"
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification with action buttons
           - if: "{{ pickup_notification_enabled }}"
             then:
               # Define template variables for notification
@@ -2825,6 +2962,7 @@ actions:
                         title: !input pickup_notification_action1_name
                       - action: "CANCEL_CLEANING"
                         title: !input pickup_notification_action2_name
+                    # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
                       sound: >
@@ -2837,20 +2975,45 @@ actions:
                         {% else %}
                           "{{ pickup_notification_sound }}"
                         {% endif %}
+
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map2_sweep"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ⏭️ [SKIP mop washing - sweep mode]
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 2 Mop
       # ========================================
+      # Preparation workflow for maps without base station (Sweep & Mop)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (prevents auto-return during cleaning)
+      # 3. Set cleaning mode
+      # 4. Manual mop washing with button press
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map2_mop' }}"
@@ -2861,17 +3024,111 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_2.cleaning_repeats }}"
               schedule_label: "Map 2 Mop"
 
+          # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map2_mop"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ Manual mop washing (~3min)
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
+            continue_on_timeout: false
+
+          # Step 2: Save & disable self_clean (prevents auto-return during cleaning)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 3: Set cleaning mode
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 4: Manual mop washing (controlled preparation)
+          - action: button.press
+            target:
+              entity_id: "button.{{ vacuum_base_name }}_self_clean"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
+            timeout: 60
+            continue_on_timeout: false
+          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+            timeout: 180
+            continue_on_timeout: false
+
+          # Step 5: Extract segments & start cleaning
+          - variables:
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
+                {% else %}
+                  []
+                {% endif %}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
+              - action: vacuum.start
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+          # Step 6: Wait for cleaning state & pause
+          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+            timeout: 120
+            continue_on_timeout: false
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          # Step 7: Switch to target map
           - action: select.select_option
             target:
               entity_id: "{{ selected_map_select }}"
@@ -2880,77 +3137,25 @@ actions:
           - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
             timeout: 30
             continue_on_timeout: false
-          - delay:
-              seconds: 3
+
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
-          - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
-                {% else %}
-                  []
-                {% endif %}
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
-              - action: vacuum.start
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
-            continue_on_timeout: false
-          # Wait for self-wash base workflow (sweep+mop only)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for mop moistening to start
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-              # Wait until washing complete (robot starts driving)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-              # Wait for robot to exit station (~2.5s tested)
-              - delay:
-                  seconds: 3
-          - action: vacuum.pause
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
             target:
-              entity_id: "{{ vacuum_entity }}"
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification with action buttons
           - if: "{{ pickup_notification_enabled }}"
             then:
               # Define template variables for notification
@@ -2967,6 +3172,7 @@ actions:
                         title: !input pickup_notification_action1_name
                       - action: "CANCEL_CLEANING"
                         title: !input pickup_notification_action2_name
+                    # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
                       sound: >
@@ -2979,20 +3185,45 @@ actions:
                         {% else %}
                           "{{ pickup_notification_sound }}"
                         {% endif %}
+
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map2_mop"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ✅ Mops washed & tank filled
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 3 Sweep
       # ========================================
+      # Preparation workflow for maps without base station (Sweep Only)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (for consistency)
+      # 3. Set cleaning mode
+      # 4. [SKIP mop washing - sweep-only mode]
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map3_sweep' }}"
@@ -3003,17 +3234,102 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_3.cleaning_repeats }}"
               schedule_label: "Map 3 Sweep"
 
+          # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map3_sweep"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ [SKIP mop washing - sweep mode]
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
+            continue_on_timeout: false
+
+          # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 3: Set cleaning mode
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 4: [SKIP mop washing - this is sweep-only mode]
+
+          # Step 5: Extract segments & start cleaning
+          - variables:
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
+                {% else %}
+                  []
+                {% endif %}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
+              - action: vacuum.start
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+          # Step 6: Wait for cleaning state & pause
+          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+            timeout: 120
+            continue_on_timeout: false
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          # Step 7: Switch to target map
           - action: select.select_option
             target:
               entity_id: "{{ selected_map_select }}"
@@ -3022,77 +3338,25 @@ actions:
           - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
             timeout: 30
             continue_on_timeout: false
-          - delay:
-              seconds: 3
+
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
-          - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
-                {% else %}
-                  []
-                {% endif %}
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
-              - action: vacuum.start
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
-            continue_on_timeout: false
-          # Wait for self-wash base workflow (sweep+mop only)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for mop moistening to start
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-              # Wait until washing complete (robot starts driving)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-              # Wait for robot to exit station (~2.5s tested)
-              - delay:
-                  seconds: 3
-          - action: vacuum.pause
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
             target:
-              entity_id: "{{ vacuum_entity }}"
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification with action buttons
           - if: "{{ pickup_notification_enabled }}"
             then:
               # Define template variables for notification
@@ -3109,6 +3373,7 @@ actions:
                         title: !input pickup_notification_action1_name
                       - action: "CANCEL_CLEANING"
                         title: !input pickup_notification_action2_name
+                    # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
                       sound: >
@@ -3121,20 +3386,45 @@ actions:
                         {% else %}
                           "{{ pickup_notification_sound }}"
                         {% endif %}
+
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map3_sweep"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ⏭️ [SKIP mop washing - sweep mode]
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Prepare Robot - Map 3 Mop
       # ========================================
+      # Preparation workflow for maps without base station (Sweep & Mop)
+      # 1. Disable customized_cleaning (enables global mode settings)
+      # 2. Save & disable self_clean (prevents auto-return during cleaning)
+      # 3. Set cleaning mode
+      # 4. Manual mop washing with button press
+      # 5. Start segment cleaning
+      # 6. Pause after undock delay
+      # 7. Switch to target map
+      # 8. Restore settings after map switch
       - conditions:
           - condition: template
             value_template: "{{ trigger.id == 'notification_prepare_map3_mop' }}"
@@ -3145,17 +3435,111 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_3.cleaning_repeats }}"
               schedule_label: "Map 3 Mop"
 
+          # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "🔧 PREPARE Handler: {{ schedule_label }}"
+                  title: "⚙️ Preparation Started"
+                  notification_id: "vacuum_prepare_map3_mop"
                   message: |
-                    Parameters:
-                    • Mode: {{ notification_target_mode }}
-                    • Map: {{ notification_target_map_name }}
-                    • Repeats: {{ notification_cleaning_repeats }}
+                    # 🎯 PREPARATION WORKFLOW
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Target Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Repeats:** {{ notification_cleaning_repeats }}x
 
+                    # ⏳ WORKFLOW STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ⏺️ Disable customized_cleaning
+                    ⏺️ Manage self_clean switch
+                    ⏺️ Set cleaning mode
+                    ⏺️ Manual mop washing (~3min)
+                    ⏺️ Start segment cleaning
+                    ⏺️ Pause after {{ pause_delay_after_undock }}s
+                    ⏺️ Switch to target map
+                    ⏺️ Restore settings
+
+                    **Status:** In Progress... ⏳
+
+          # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+            timeout: 10
+            continue_on_timeout: false
+
+          # Step 2: Save & disable self_clean (prevents auto-return during cleaning)
+          - variables:
+              original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 3: Set cleaning mode
+          - action: select.select_option
+            target:
+              entity_id: "{{ cleaning_mode_select }}"
+            data:
+              option: "{{ notification_target_mode }}"
+
+          # Step 4: Manual mop washing (controlled preparation)
+          - action: button.press
+            target:
+              entity_id: "button.{{ vacuum_base_name }}_self_clean"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
+            timeout: 60
+            continue_on_timeout: false
+          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+            timeout: 180
+            continue_on_timeout: false
+
+          # Step 5: Extract segments & start cleaning
+          - variables:
+              notification_map_segments: >-
+                {% set map_camera = 'camera.' ~ vacuum_base_name ~ '_map' %}
+                {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+                  {% if state_attr(map_camera, 'rooms') is not none %}
+                    {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
+                  {% elif state_attr(map_camera, 'segments') is not none %}
+                    {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
+                  {% else %}
+                    []
+                  {% endif %}
+                {% else %}
+                  []
+                {% endif %}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ use_segment_service }}"
+                  - condition: template
+                    value_template: "{{ notification_map_segments | length > 0 }}"
+                sequence:
+                  - action: dreame_vacuum.vacuum_clean_segment
+                    target:
+                      entity_id: "{{ vacuum_entity }}"
+                    data:
+                      segments: "{{ notification_map_segments }}"
+                      repeats: "{{ notification_cleaning_repeats }}"
+            default:
+              - action: vacuum.start
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+          # Step 6: Wait for cleaning state & pause
+          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+            timeout: 120
+            continue_on_timeout: false
+          - delay:
+              seconds: "{{ pause_delay_after_undock }}"
+          - action: vacuum.pause
+            target:
+              entity_id: "{{ vacuum_entity }}"
+
+          # Step 7: Switch to target map
           - action: select.select_option
             target:
               entity_id: "{{ selected_map_select }}"
@@ -3164,77 +3548,25 @@ actions:
           - wait_template: "{{ states(selected_map_select) == notification_target_map_name }}"
             timeout: 30
             continue_on_timeout: false
-          - delay:
-              seconds: 3
+
+          # Step 8: Re-disable customized_cleaning (map switch re-enables it)
+          - action: switch.turn_off
+            target:
+              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+
+          # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ notification_target_mode }}"
-          - variables:
-              notification_segments: >-
-                {% if state_attr(map_camera, 'rooms') is not none %}
-                  {{ state_attr(map_camera, 'rooms').keys() | map('int') | list }}
-                {% elif state_attr(map_camera, 'segments') is not none %}
-                  {{ state_attr(map_camera, 'segments').keys() | map('int') | list }}
-                {% else %}
-                  []
-                {% endif %}
-          - if: "{{ debug_mode }}"
-            then:
-              - action: persistent_notification.create
-                data:
-                  title: "✅ Map Change Complete"
-                  message: |
-                    Map switched to: {{ states(selected_map_select) }}
-                    Mode: {{ states(cleaning_mode_select) }}
-                    Segments: {{ notification_segments }}
-                    Proceeding with start...
-          - if: "{{ has_value(self_clean_switch) and notification_target_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
-            then:
-              - action: switch.turn_on
-                target:
-                  entity_id: "{{ self_clean_switch }}"
-          - if: "{{ use_segment_service and has_segments }}"
-            then:
-              - action: dreame_vacuum.vacuum_clean_segment
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-                data:
-                  segments: "{{ notification_segments }}"
-                  repeats: "{{ notification_cleaning_repeats }}"
-            else:
-              - action: vacuum.start
-                target:
-                  entity_id: "{{ vacuum_entity }}"
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
-            timeout:
-              seconds: "{{ start_timeout }}"
-            continue_on_timeout: false
-          # Wait for self-wash base workflow (sweep+mop only)
-          - if: "{{ notification_target_mode == mode_sweeping_mopping }}"
-            then:
-              # Wait for mop moistening to start
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'washing') }}"
-                timeout:
-                  seconds: 30
-                continue_on_timeout: true
-              # Wait until washing complete (robot starts driving)
-              - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
-                timeout:
-                  seconds: "{{ moistening_timeout }}"
-                continue_on_timeout: true
-              # Wait for robot to exit station (~2.5s tested)
-              - delay:
-                  seconds: 3
-          - action: vacuum.pause
+
+          # Step 10: Restore self_clean to original state
+          - action: "switch.turn_{{ original_self_clean_state }}"
             target:
-              entity_id: "{{ vacuum_entity }}"
-          - if: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "{{ self_clean_switch }}"
+              entity_id: "switch.{{ vacuum_base_name }}_self_clean"
+
+          # Step 11: Send pickup notification with action buttons
           - if: "{{ pickup_notification_enabled }}"
             then:
               # Define template variables for notification
@@ -3251,6 +3583,7 @@ actions:
                         title: !input pickup_notification_action1_name
                       - action: "CANCEL_CLEANING"
                         title: !input pickup_notification_action2_name
+                    # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
                       sound: >
@@ -3263,16 +3596,32 @@ actions:
                         {% else %}
                           "{{ pickup_notification_sound }}"
                         {% endif %}
+
+          # Debug: Completion notification
           - if: "{{ debug_mode }}"
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⏸️ Robot Ready for Transport"
+                  title: "✅ Preparation Complete"
+                  notification_id: "vacuum_prepare_map3_mop"
                   message: |
-                    Preparation complete!
-                    Robot paused on {{ states(selected_map_select) }}.
-                    Mode: {{ states(cleaning_mode_select) }}
-                    {% if pickup_notification_enabled %}Pickup notification sent.{% endif %}
+                    # ✅ READY FOR TRANSPORT
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    **Map:** {{ notification_target_map_name }}
+                    **Mode:** {{ notification_target_mode }}
+                    **Status:** Paused & Ready 🎯
+
+                    # 📋 COMPLETED STEPS
+                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ✅ customized_cleaning managed
+                    ✅ self_clean switch controlled
+                    ✅ Cleaning mode set
+                    ✅ Mops washed & tank filled
+                    ✅ Robot undocked & paused
+                    ✅ Map switched to target
+                    ✅ Settings restored
+
+                    🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
       # ========================================
       # NOTIFICATION ACTION: Skip Cleaning
