@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.0 (Alpha - Safety Layer + Timeout Optimization)**
+    **Version: 0.4.1 (Alpha - Localization Support + Emergency Watch)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -32,7 +32,7 @@ blueprint:
       name: "Robot Configuration"
       description: |
         Select your Dreame vacuum and configure transport behavior.
-        All related entities (status, mode, map) are auto-detected.
+        All related entities (mode, map) are auto-detected, and status is accessed via vacuum entity attributes.
       icon: mdi:robot-vacuum
       collapsed: true
       input:
@@ -401,24 +401,6 @@ blueprint:
               mode: slider
           default: 15
 
-        scheduled_notification_action1_name:
-          name: "Prepare Button Name"
-          description: |
-            Button label for starting robot preparation.
-            **Action ID:** `PREPARE_ROBOT` (fixed, do not change)
-          selector:
-            text:
-          default: "Prepare Robot"
-
-        scheduled_notification_action2_name:
-          name: "Skip Button Name"
-          description: |
-            Button label for canceling this scheduled cleaning.
-            **Action ID:** `SKIP_CLEANING` (fixed, do not change)
-          selector:
-            text:
-          default: "Skip Cleaning"
-
         scheduled_notification_interruption_level:
           name: "iOS Interruption Level"
           description: |
@@ -553,24 +535,6 @@ blueprint:
               mode: slider
           default: 10
 
-        pickup_notification_action1_name:
-          name: "Start Button Name"
-          description: |
-            Button label for resuming cleaning after transport.
-            **Action ID:** `START_CLEANING` (fixed, do not change)
-          selector:
-            text:
-          default: "Start Cleaning"
-
-        pickup_notification_action2_name:
-          name: "Cancel Button Name"
-          description: |
-            Button label for canceling and returning to base station.
-            **Action ID:** `CANCEL_CLEANING` (fixed, do not change)
-          selector:
-            text:
-          default: "Cancel Cleaning"
-
         pickup_notification_interruption_level:
           name: "iOS Interruption Level"
           description: |
@@ -667,7 +631,67 @@ blueprint:
           default: true
 
     # ========================================
-    # SECTION F: ADVANCED SETTINGS
+    # SECTION F: LOCALIZATION
+    # ========================================
+    localization_config:
+      name: "🌐 Localization"
+      description: |
+        Customize display texts for notifications and buttons.
+        Perfect for non-English Home Assistant installations.
+      icon: mdi:translate
+      collapsed: true
+      input:
+        sweep_display_text:
+          name: "Sweep Mode Display Name"
+          description: "Display name for sweep-only mode (e.g., 'Saugen' in German)"
+          selector:
+            text:
+          default: "Sweep"
+
+        mop_display_text:
+          name: "Mop Mode Display Name"
+          description: "Display name for mop-only mode (e.g., 'Wischen' in German)"
+          selector:
+            text:
+          default: "Mop"
+
+        sweep_mop_display_text:
+          name: "Combined Mode Display Name"
+          description: "Display name for combined sweep+mop mode (e.g., 'Saugen + Wischen' in German)"
+          selector:
+            text:
+          default: "Sweep + Mop"
+
+        prepare_button_text:
+          name: "Prepare Button Label"
+          description: "Button text for robot preparation (e.g., 'Roboter vorbereiten' in German)"
+          selector:
+            text:
+          default: "Prepare Robot"
+
+        skip_button_text:
+          name: "Skip Button Label"
+          description: "Button text for skipping cleaning (e.g., 'Reinigung überspringen' in German)"
+          selector:
+            text:
+          default: "Skip Cleaning"
+
+        start_cleaning_button_text:
+          name: "Start Cleaning Button Label"
+          description: "Button text for starting cleaning (e.g., 'Reinigung starten' in German)"
+          selector:
+            text:
+          default: "Start Cleaning"
+
+        cancel_cleaning_button_text:
+          name: "Cancel Button Label"
+          description: "Button text for canceling (e.g., 'Abbrechen' in German)"
+          selector:
+            text:
+          default: "Cancel Cleaning"
+
+    # ========================================
+    # SECTION G: ADVANCED SETTINGS
     # ========================================
     advanced_settings:
       name: "Advanced Settings"
@@ -955,7 +979,8 @@ triggers:
   # Monitors for unexpected cleaning starts outside our workflow
   # Validates map selection and pauses if incorrect
   - trigger: state
-    entity_id: !input status_sensor
+    entity_id: !input vacuum_entity
+    attribute: status
     to:
       - "room_cleaning"
       - "sweeping"
@@ -981,7 +1006,6 @@ variables:
   # ACTIVE ENTITIES (Auto-Detected)
   # ========================================
   # These are the active entities used throughout the automation
-  status_sensor: "sensor.{{ vacuum_base_name }}_status"
   cleaning_mode_select: "select.{{ vacuum_base_name }}_cleaning_mode"
   selected_map_select: "select.{{ vacuum_base_name }}_selected_map"
   map_camera: "camera.{{ vacuum_base_name }}_map"
@@ -1063,7 +1087,7 @@ variables:
   # ENTITY STATE CHECKS
   # ========================================
   # IMPORTANT: These must come BEFORE variables that use them (like repeats, cleaning_mode_display)
-  current_status: "{{ states(status_sensor) }}"
+  current_status: "{{ state_attr(vacuum_entity, 'status') }}"
   current_mode: "{{ states(cleaning_mode_select) }}"
   current_map_name: "{{ states(selected_map_select) }}"
   current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
@@ -1107,8 +1131,9 @@ variables:
   robot_name: "{{ vacuum_base_name | replace('_', ' ') | title }}"
 
   cleaning_mode_display: >
-    {% if current_mode == mode_sweeping %}Sweep Only
-    {% elif current_mode == mode_sweeping_mopping %}Sweep + Mop
+    {% if current_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+    {% elif current_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+    {% elif current_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
     {% else %}{{ current_mode }}{% endif %}
 
   current_time: "{{ now().strftime('%H:%M') }}"
@@ -1125,6 +1150,24 @@ variables:
   pickup_notification_sound: !input pickup_notification_sound
   pickup_notification_critical: !input pickup_notification_critical
   pickup_notification_volume: !input pickup_notification_volume
+
+  # ========================================
+  # LOCALIZATION
+  # ========================================
+  # User-customizable display texts for multilingual notifications
+  sweep_display: !input sweep_display_text
+  mop_display: !input mop_display_text
+  sweep_mop_display: !input sweep_mop_display_text
+  prepare_button: !input prepare_button_text
+  skip_button: !input skip_button_text
+  start_cleaning_button: !input start_cleaning_button_text
+  cancel_cleaning_button: !input cancel_cleaning_button_text
+
+  # Mode display mapping: internal values → localized display names
+  mode_display_map:
+    sweeping: "{{ sweep_display }}"
+    mopping: "{{ mop_display }}"
+    sweeping_and_mopping: "{{ sweep_mop_display }}"
 
   # ========================================
   # SCHEDULE HANDLING & CONFLICT DETECTION
@@ -1146,7 +1189,7 @@ variables:
   schedule_conflict_detected: >
     {% if is_schedule_trigger %}
       {# Check if robot is currently cleaning (excluding paused state) #}
-      {% set is_currently_cleaning = states(status_sensor) in cleaning_states and states(status_sensor) != paused_state %}
+      {% set is_currently_cleaning = state_attr(vacuum_entity, 'status') in cleaning_states and state_attr(vacuum_entity, 'status') != paused_state %}
       {{ is_currently_cleaning }}
     {% else %}
       false
@@ -1492,7 +1535,7 @@ actions:
                           entity_id: "{{ vacuum_entity }}"
 
                   # Wait for cleaning status
-                  - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+                  - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
                     timeout:
                       seconds: "{{ start_timeout }}"
                     continue_on_timeout: false
@@ -1519,7 +1562,7 @@ actions:
                       - variables:
                           timing_start_moistening: "{{ now().timestamp() }}"
 
-                      - wait_template: "{{ states(status_sensor) == moistening_status }}"
+                      - wait_template: "{{ state_attr(vacuum_entity, 'status') == moistening_status }}"
                         timeout:
                           seconds: "{{ moistening_timeout }}"
                         continue_on_timeout: true
@@ -1805,8 +1848,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -1816,9 +1860,9 @@ actions:
                       data:
                         actions:
                           - action: "PREPARE_MAP1_SWEEP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -1908,8 +1952,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -1919,9 +1964,9 @@ actions:
                       data:
                         actions:
                           - action: "PREPARE_MAP1_MOP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -2011,8 +2056,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2022,9 +2068,9 @@ actions:
                       data:
                         actions:
                           - action: "PREPARE_MAP2_SWEEP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -2114,8 +2160,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2125,9 +2172,9 @@ actions:
                       data:
                         actions:
                           - action: "PREPARE_MAP2_MOP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -2217,8 +2264,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2228,9 +2276,9 @@ actions:
                       data:
                         actions:
                           - action: "PREPARE_MAP3_SWEEP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -2321,8 +2369,9 @@ actions:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}Sweep Only
-                        {% elif target_mode == mode_sweeping_mopping %}Sweep + Mop
+                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
+                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2333,9 +2382,9 @@ actions:
                         # Action buttons
                         actions:
                           - action: "PREPARE_MAP3_MOP"
-                            title: !input scheduled_notification_action1_name
+                            title: "{{ prepare_button }}"
                           - action: "SKIP_CLEANING"
-                            title: !input scheduled_notification_action2_name
+                            title: "{{ skip_button }}"
                         # iOS Push Settings for Lock Screen
                         push:
                           interruption-level: "{{ scheduled_notification_interruption_level }}"
@@ -2466,7 +2515,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -2519,9 +2568,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
@@ -2664,7 +2713,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -2716,9 +2765,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
                       sound: >
@@ -2851,7 +2900,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -2904,9 +2953,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
@@ -3050,7 +3099,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -3103,9 +3152,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
@@ -3239,7 +3288,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -3292,9 +3341,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
@@ -3438,7 +3487,7 @@ actions:
                   entity_id: "{{ vacuum_entity }}"
 
           # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ states(status_sensor) in cleaning_states }}"
+          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
           # Wait for robot to physically leave charging contacts (critical - abort if fails)
@@ -3491,9 +3540,9 @@ actions:
                   data:
                     actions:
                       - action: "START_CLEANING"
-                        title: !input pickup_notification_action1_name
+                        title: "{{ start_cleaning_button }}"
                       - action: "CANCEL_CLEANING"
-                        title: !input pickup_notification_action2_name
+                        title: "{{ cancel_cleaning_button }}"
                     # iOS Push Settings
                     push:
                       interruption-level: "{{ pickup_notification_interruption_level }}"
@@ -3592,7 +3641,7 @@ actions:
                     **Cleaning started externally**
 
                     **Map:** {{ states(selected_map_select) }}
-                    **Status:** {{ states(status_sensor) }}
+                    **Status:** {{ state_attr(vacuum_entity, 'status') }}
                     **Source:** Outside blueprint workflow
 
       # ========================================

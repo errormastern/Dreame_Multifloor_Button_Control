@@ -1,6 +1,6 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
@@ -18,6 +18,8 @@ Control Dreame vacuum cleaners across multiple floors with scheduled cleaning an
 - 🎛️ Manual control via MQTT, device triggers, state changes, or events
 - 🏠 Segment-based cleaning with configurable repeats per map
 - ⚠️ Conflict detection (only one schedule runs at a time)
+- 🌐 Localization support for multilingual notifications
+- ⚠️ Emergency map validation (pauses if cleaning starts on wrong map)
 - 🐛 Debug mode with timing measurements and execution tracking
 
 ## 📋 Requirements
@@ -42,6 +44,27 @@ Or manually: **Settings** → **Automations & Scenes** → **Blueprints** → **
 4. Save and test
 
 Related entities (status, mode, map, camera) are auto-detected from the vacuum entity.
+
+## 🌐 Localization (Optional)
+
+The blueprint supports multilingual notifications for non-English Home Assistant installations. Customize display texts in the **Localization** section:
+
+| Setting | Default (English) | Example (German) |
+|---------|-------------------|------------------|
+| Sweep Mode Display | "Sweep" | "Saugen" |
+| Mop Mode Display | "Mop" | "Wischen" |
+| Combined Mode Display | "Sweep + Mop" | "Saugen + Wischen" |
+| Prepare Button Label | "Prepare Robot" | "Roboter vorbereiten" |
+| Skip Button Label | "Skip Cleaning" | "Reinigung überspringen" |
+| Start Cleaning Button Label | "Start Cleaning" | "Reinigung starten" |
+| Cancel Button Label | "Cancel Cleaning" | "Abbrechen" |
+
+**Where used:**
+- Notification messages (cleaning mode display)
+- Action button labels in scheduled and pickup notifications
+- Template variable `{{ cleaning_mode_display }}` in custom messages
+
+**Internal logic remains English** - only user-facing texts are localized.
 
 ## 📅 Schedule Setup
 
