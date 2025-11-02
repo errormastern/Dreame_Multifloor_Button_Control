@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.3.17 (Alpha - Debug UX + Moistening Timeout)**
+    **Version: 0.4.0 (Alpha - Safety Layer + Timeout Optimization)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -948,6 +948,20 @@ triggers:
     event_data:
       action: "CANCEL_CLEANING"
     id: notification_cancel
+
+  # ========================================
+  # EMERGENCY WATCH TRIGGER
+  # ========================================
+  # Monitors for unexpected cleaning starts outside our workflow
+  # Validates map selection and pauses if incorrect
+  - trigger: state
+    entity_id: !input status_sensor
+    to:
+      - "room_cleaning"
+      - "sweeping"
+      - "mopping"
+      - "sweeping_and_mopping"
+    id: emergency_watch
 
 # ========================================
 # VARIABLEN
@@ -2455,12 +2469,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -2654,12 +2667,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -2842,12 +2854,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3042,12 +3053,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3232,12 +3242,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3432,12 +3441,11 @@ actions:
           - wait_template: "{{ states(status_sensor) in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts
+          # Wait for robot to physically leave charging contacts (critical - abort if fails)
           - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: 15
-            continue_on_timeout: true
-          - delay:
-              seconds: "{{ pause_delay_after_undock }}"
+            timeout: "{{ undocking_timeout }}"
+            continue_on_timeout: false
+          # Pause immediately after undocking
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3531,6 +3539,61 @@ actions:
                 data:
                   title: "⏭️ Scheduled Cleaning Skipped"
                   message: "User skipped scheduled cleaning via notification button."
+
+      # ========================================
+      # EMERGENCY WATCH: Unexpected Cleaning Start
+      # ========================================
+      # Validates map selection when cleaning starts outside our workflow
+      # Pauses robot if selected map is not one of our configured maps
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'emergency_watch' }}"
+        sequence:
+          # Safety check: Validate selected map
+          - if:
+              - condition: template
+                value_template: "{{ states(selected_map_select) not in [map_1_name, map_2_name, map_3_name] }}"
+            then:
+              # Invalid map → Emergency pause
+              - action: vacuum.pause
+                target:
+                  entity_id: "{{ vacuum_entity }}"
+
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ EMERGENCY: Invalid Map"
+                  notification_id: "vacuum_emergency_pause"
+                  message: |
+                    **Cleaning paused automatically**
+
+                    **Current Map:** {{ states(selected_map_select) }}
+                    **Configured Maps:**
+                    • {{ map_1_name }}
+                    • {{ map_2_name }}
+                    • {{ map_3_name }}
+
+                    **Action Required:**
+                    1. Use Schedule workflow (auto-prepares robot)
+                    2. OR: Use PREPARE workflow for manual transport
+                    3. OR: Switch to correct map before starting
+
+              - stop: "Emergency pause - invalid map selected"
+
+          # Map is valid → Continue (external start on valid map)
+          - if:
+              - condition: template
+                value_template: "{{ debug_mode }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "✅ External Start (Map Valid)"
+                  notification_id: "vacuum_external_start"
+                  message: |
+                    **Cleaning started externally**
+
+                    **Map:** {{ states(selected_map_select) }}
+                    **Status:** {{ states(status_sensor) }}
+                    **Source:** Outside blueprint workflow
 
       # ========================================
       # NOTIFICATION ACTION: Start Cleaning
