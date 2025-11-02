@@ -1264,6 +1264,38 @@ variables:
 # ========================================
 action:
   # ========================================
+  # CRITICAL DEBUG - ALWAYS RUNS (Temporary)
+  # ========================================
+  # This notification fires EVERY time a trigger occurs
+  # Helps diagnose why buttons don't work
+  - action: persistent_notification.create
+    data:
+      title: "🔴 CRITICAL DEBUG - Button Pressed"
+      message: |
+        **Time:** {{ now().strftime('%H:%M:%S') }}
+
+        **Trigger Platform:** {{ trigger.platform }}
+        **Trigger ID:** {{ trigger.id | default('❌ NOT SET') }}
+        **Triggered Function:** {{ triggered_function }}
+
+        {% if trigger.platform == 'mqtt' %}
+        **MQTT Payload:** {{ trigger.payload_json | default('N/A') }}
+        **Action:** {{ trigger.payload_json.action | default('N/A') }}
+        {% elif trigger.platform == 'device' %}
+        **Device Subtype:** {{ trigger.subtype | default('N/A') }}
+        {% elif trigger.platform == 'state' %}
+        **Entity:** {{ trigger.entity_id }}
+        **From:** {{ trigger.from_state.state }} → **To:** {{ trigger.to_state.state }}
+        {% elif trigger.platform == 'event' %}
+        **Event Type:** {{ trigger.event.event_type }}
+        **Event Data:** {{ trigger.event.data }}
+        {% endif %}
+
+        **Current Status:** {{ current_status }}
+        **Current Map:** {{ current_map_name }}
+        **Current Mode:** {{ current_mode }}
+
+  # ========================================
   # Debug Notification (optional)
   # ========================================
   - if:
