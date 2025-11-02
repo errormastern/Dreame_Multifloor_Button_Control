@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.3 (Alpha - Restore v0.3.4 Trigger Structure)**
+    **Version: 0.4.4 (Alpha - Fix Undocking Detection)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -995,7 +995,7 @@ variables:
   selected_map_select: "select.{{ vacuum_base_name }}_selected_map"
   map_camera: "camera.{{ vacuum_base_name }}_map"
   self_clean_switch: "switch.{{ vacuum_base_name }}_self_clean"
-  charging_state_sensor: "binary_sensor.{{ vacuum_base_name }}_charging_state"
+  charging_status_sensor: "sensor.{{ vacuum_base_name }}_charging_status"
 
   # ========================================
   # MAP CONFIGURATION (Fully Auto-Detected)
@@ -1563,7 +1563,7 @@ actions:
                   # Wait until robot has left charging station
                   - if:
                       - condition: template
-                        value_template: "{{ has_value(charging_state_sensor) }}"
+                        value_template: "{{ has_value(charging_status_sensor) }}"
                     then:
                       - variables:
                           timing_start_undocking: "{{ now().timestamp() }}"
@@ -1577,7 +1577,7 @@ actions:
                               title: "⏳ Waiting for Undocking"
                               message: "Waiting for robot to leave charging station..."
 
-                      - wait_template: "{{ is_state(charging_state_sensor, 'off') }}"
+                      - wait_template: "{{ states(charging_status_sensor) == 'not_charging' }}"
                         timeout:
                           seconds: "{{ undocking_timeout }}"
                         continue_on_timeout: true
