@@ -1,17 +1,17 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.2 (Alpha - Hotfix: Variable Order + Template Fixes)**
+    **Version: 0.4.3 (Alpha - Restore v0.3.4 Trigger Structure)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
 
     **Main Features:**
-    • Auto-detection of vacuum entities (select vacuum, rest auto-detected)
+    • 🤖 Auto-detection of vacuum entities (select vacuum, rest auto-detected)
     • 📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)
     • 🔔 Notification workflow with action buttons for transport preparation
-    • Manual control via MQTT, device triggers, state changes, or events
-    • Segment-based cleaning with configurable repeats
+    • ⏭️ Manual control via MQTT, device triggers, state changes, or events
+    • 🗺️ Segment-based Map cleaning with configurable repeats
 
     **Requirements:**
     • Home Assistant ≥ 2024.10.0
@@ -973,22 +973,6 @@ triggers:
       action: "CANCEL_CLEANING"
     id: notification_cancel
 
-  # ========================================
-  # EMERGENCY WATCH TRIGGER (TEMPORARILY DISABLED - DEBUGGING)
-  # ========================================
-  # Monitors for unexpected cleaning starts outside our workflow
-  # Validates map selection and pauses if incorrect
-  # DISABLED: Attribute trigger may be blocking all automation triggers
-  # - trigger: state
-  #   entity_id: !input vacuum_entity
-  #   attribute: status
-  #   to:
-  #     - "room_cleaning"
-  #     - "sweeping"
-  #     - "mopping"
-  #     - "sweeping_and_mopping"
-  #   id: emergency_watch
-
 # ========================================
 # VARIABLEN
 # ========================================
@@ -1254,41 +1238,9 @@ variables:
   segments_source: "{{ 'rooms' if room_ids | length > 0 else ('segments' if segment_ids | length > 0 else 'none') }}"
 
 # ========================================
-# ACTION
+# ACTIONS
 # ========================================
-action:
-  # ========================================
-  # CRITICAL DEBUG - ALWAYS RUNS (Temporary)
-  # ========================================
-  # This notification fires EVERY time a trigger occurs
-  # Helps diagnose why buttons don't work
-  - action: persistent_notification.create
-    data:
-      title: "🔴 CRITICAL DEBUG - Button Pressed"
-      message: |
-        **Time:** {{ now().strftime('%H:%M:%S') }}
-
-        **Trigger Platform:** {{ trigger.platform }}
-        **Trigger ID:** {{ trigger.id | default('❌ NOT SET') }}
-        **Triggered Function:** {{ triggered_function }}
-
-        {% if trigger.platform == 'mqtt' %}
-        **MQTT Payload:** {{ trigger.payload_json | default('N/A') }}
-        **Action:** {{ trigger.payload_json.action | default('N/A') }}
-        {% elif trigger.platform == 'device' %}
-        **Device Subtype:** {{ trigger.subtype | default('N/A') }}
-        {% elif trigger.platform == 'state' %}
-        **Entity:** {{ trigger.entity_id }}
-        **From:** {{ trigger.from_state.state }} → **To:** {{ trigger.to_state.state }}
-        {% elif trigger.platform == 'event' %}
-        **Event Type:** {{ trigger.event.event_type }}
-        **Event Data:** {{ trigger.event.data }}
-        {% endif %}
-
-        **Current Status:** {{ current_status }}
-        **Current Map:** {{ current_map_name }}
-        **Current Mode:** {{ current_mode }}
-
+actions:
   # ========================================
   # Debug Notification (optional)
   # ========================================

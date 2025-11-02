@@ -1,6 +1,6 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.4.2-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.4.3-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
