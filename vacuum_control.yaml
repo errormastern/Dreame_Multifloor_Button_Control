@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.3.16 (Alpha - Charging Contacts Detection)**
+    **Version: 0.3.17 (Alpha - Debug UX + Moistening Timeout)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -690,7 +690,7 @@ blueprint:
           selector:
             number:
               min: 10
-              max: 180
+              max: 300
               step: 5
               unit_of_measurement: "s"
               mode: slider
@@ -1217,32 +1217,31 @@ actions:
           title: "📊 {{ triggered_function|replace('_',' ')|title }}"
           message: |
             ⏱ {{ now().strftime('%H:%M:%S') }}
+
+            ▸ CURRENT STATE
             **Status:** {{ current_status }}
             **Map:** {{ current_map_name }}
             **Mode:** {{ current_mode }}
+            **Cleaning:** {{ is_cleaning }} | **Paused:** {{ is_paused }}
 
-            **Trigger**
+            ▸ TRIGGER
             **Platform:** {{ trigger.platform }}
             **ID:** {{ trigger.id | default('N/A') }}{% if trigger.platform == 'state' %}
             **Entity:** {{ trigger.entity_id | default('N/A') }}
             **State:** {{ trigger.to_state.state if trigger.to_state is defined else 'N/A' }}{% endif %}
 
-            **Current State**
-            **Cleaning:** {{ is_cleaning }}
-            **Paused:** {{ is_paused }}
-
-            **Current Map**
+            ▸ CURRENT MAP CONFIG
             **Name:** {{ current_map_config.name | default('Unknown') }}
             **Repeats:** {{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) }}x
             **Base:** {{ current_map_config.has_base_station | default(false) }}
             **Segments:** {{ map_segments | length }} ({{ segments_source }})
 
-            **All Maps**
+            ▸ ALL MAPS
             • **Map 1:** {{ map_config.map_1.name }} ({{ map_config.map_1.cleaning_repeats }}x, Base: {{ map_config.map_1.has_base_station }})
             • **Map 2:** {{ map_config.map_2.name }} ({{ map_config.map_2.cleaning_repeats }}x, Base: {{ map_config.map_2.has_base_station }})
             • **Map 3:** {{ map_config.map_3.name }} ({{ map_config.map_3.cleaning_repeats }}x, Base: {{ map_config.map_3.has_base_station }})
 
-            **Schedules**
+            ▸ SCHEDULES
             **Trigger:** {{ is_schedule_trigger }}
             **Conflict:** {{ schedule_conflict_detected }}{% if is_schedule_trigger %}
             **Target:** {{ schedule_trigger_map_name }} ({{ schedule_trigger_mode }}){% endif %}
