@@ -1085,9 +1085,19 @@ variables:
       has_base_station: "{{ map_3_name == base_station_map }}"
 
   # ========================================
+  # CLEANING SETTINGS (Must be defined BEFORE is_cleaning/is_paused)
+  # ========================================
+  mode_sweeping: !input sweeping_mode_value
+  mode_sweeping_mopping: !input sweeping_mopping_mode_value
+  global_cleaning_repeats: !input global_cleaning_repeats
+  cleaning_states_raw: !input cleaning_states
+  cleaning_states: "{{ cleaning_states_raw.split(',') }}"
+  paused_state: !input paused_state
+
+  # ========================================
   # ENTITY STATE CHECKS
   # ========================================
-  # IMPORTANT: These must come BEFORE variables that use them (like repeats, cleaning_mode_display)
+  # IMPORTANT: These must come AFTER cleaning_states/paused_state definition
   current_status: "{{ state_attr(vacuum_entity, 'status') }}"
   current_mode: "{{ states(cleaning_mode_select) }}"
   current_map_name: "{{ states(selected_map_select) }}"
@@ -1106,17 +1116,8 @@ variables:
   is_cleaning: "{{ current_status in cleaning_states }}"
   is_paused: "{{ current_status == paused_state }}"
 
-  # ========================================
-  # CLEANING SETTINGS
-  # ========================================
-  mode_sweeping: !input sweeping_mode_value
-  mode_sweeping_mopping: !input sweeping_mopping_mode_value
   # Per-map cleaning repeats take priority, fall back to global setting
-  global_cleaning_repeats: !input global_cleaning_repeats
   repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
-  cleaning_states_raw: !input cleaning_states
-  cleaning_states: "{{ cleaning_states_raw.split(',') }}"
-  paused_state: !input paused_state
   moistening_status: !input moistening_status
   pause_delay_after_undock: !input pause_delay_after_undock
   start_timeout: !input start_timeout
@@ -1132,9 +1133,8 @@ variables:
   robot_name: "{{ vacuum_base_name | replace('_', ' ') | title }}"
 
   cleaning_mode_display: >
-    {% if current_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-    {% elif current_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-    {% elif current_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+    {% if current_mode == mode_sweeping %}{{ sweep_display }}
+    {% elif current_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
     {% else %}{{ current_mode }}{% endif %}
 
   current_time: "{{ now().strftime('%H:%M') }}"
@@ -1163,12 +1163,6 @@ variables:
   skip_button: !input skip_button_text
   start_cleaning_button: !input start_cleaning_button_text
   cancel_cleaning_button: !input cancel_cleaning_button_text
-
-  # Mode display mapping: internal values → localized display names
-  mode_display_map:
-    sweeping: "{{ sweep_display }}"
-    mopping: "{{ mop_display }}"
-    sweeping_and_mopping: "{{ sweep_mop_display }}"
 
   # ========================================
   # SCHEDULE HANDLING & CONFLICT DETECTION
@@ -1881,9 +1875,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -1985,9 +1978,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2089,9 +2081,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2193,9 +2184,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2297,9 +2287,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
@@ -2402,9 +2391,8 @@ action:
                       map_name: "{{ target_map_name }}"
                       schedule_name: "{{ schedule_label }}"
                       cleaning_mode_display: >
-                        {% if target_mode == mode_sweeping %}{{ mode_display_map['sweeping'] }}
-                        {% elif target_mode == mode_mopping %}{{ mode_display_map['mopping'] }}
-                        {% elif target_mode == mode_sweeping_mopping %}{{ mode_display_map['sweeping_and_mopping'] }}
+                        {% if target_mode == mode_sweeping %}{{ sweep_display }}
+                        {% elif target_mode == mode_sweeping_mopping %}{{ sweep_mop_display }}
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
