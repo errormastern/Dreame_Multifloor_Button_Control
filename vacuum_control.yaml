@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.1 (Alpha - Localization Support + Emergency Watch)**
+    **Version: 0.4.2 (Alpha - Hotfix: Variable Order + Template Fixes)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
