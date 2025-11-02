@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.4 (Alpha - Fix Undocking Detection)**
+    **Version: 0.4.5 (Alpha - Multi-Indicator Undocking + Status Fix)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -720,17 +720,33 @@ blueprint:
               mode: slider
           default: 180
 
-        start_timeout:
-          name: "⏱️ Start Timeout"
+        sweep_start_timeout:
+          name: "⏱️ Sweep Start Timeout"
           description: |
-            Wait time until robot reaches cleaning status (30-300 seconds).
-            Used after starting robot to verify cleaning began.
+            Wait time for sweep-only cleaning to start (5-30 seconds).
+            Robot leaves station immediately when sweeping only.
 
-            **Critical:** Automation aborts on timeout.
+            Fallback timeout if sensor detection fails.
           selector:
             number:
-              min: 30
-              max: 300
+              min: 5
+              max: 30
+              step: 1
+              unit_of_measurement: "s"
+              mode: slider
+          default: 10
+
+        mop_start_timeout:
+          name: "⏱️ Mop Start Timeout"
+          description: |
+            Wait time for sweep+mop cleaning to start (60-180 seconds).
+            Includes self-wash base preparation (mop moistening).
+
+            Fallback timeout if sensor detection fails.
+          selector:
+            number:
+              min: 60
+              max: 180
               step: 10
               unit_of_measurement: "s"
               mode: slider
@@ -1082,7 +1098,7 @@ variables:
   # ENTITY STATE CHECKS
   # ========================================
   # IMPORTANT: These must come AFTER cleaning_states/paused_state definition
-  current_status: "{{ state_attr(vacuum_entity, 'status') }}"
+  current_status: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') }}"
   current_mode: "{{ states(cleaning_mode_select) }}"
   current_map_name: "{{ states(selected_map_select) }}"
   current_map_id: "{{ state_attr(selected_map_select, 'map_id') }}"
@@ -1104,7 +1120,10 @@ variables:
   repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
   moistening_status: !input moistening_status
   pause_delay_after_undock: !input pause_delay_after_undock
-  start_timeout: !input start_timeout
+  sweep_start_timeout: !input sweep_start_timeout
+  mop_start_timeout: !input mop_start_timeout
+  # Dynamic timeout selection based on cleaning mode
+  start_timeout: "{{ mop_start_timeout if current_mode == mode_sweeping_mopping else sweep_start_timeout }}"
   moistening_timeout: !input moistening_timeout
   undocking_timeout: !input undocking_timeout
   use_segment_service: !input use_segment_service
@@ -1577,7 +1596,14 @@ actions:
                               title: "⏳ Waiting for Undocking"
                               message: "Waiting for robot to leave charging station..."
 
-                      - wait_template: "{{ states(charging_status_sensor) == 'not_charging' }}"
+                      - wait_template: >
+                          {{ (states('sensor.' ~ vacuum_base_name ~ '_state') in ['sweeping', 'mopping']
+                              or (states('sensor.' ~ vacuum_base_name ~ '_state') == 'sweeping_and_mopping'
+                                  and states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'idle'))
+                             or states('sensor.' ~ vacuum_base_name ~ '_status') == 'room_cleaning'
+                             or (states('sensor.' ~ vacuum_base_name ~ '_dust_collection') == 'not_available'
+                                 and states('sensor.' ~ vacuum_base_name ~ '_state') not in ['washing'])
+                             or states(charging_status_sensor) == 'not_charging' }}
                         timeout:
                           seconds: "{{ undocking_timeout }}"
                         continue_on_timeout: true
