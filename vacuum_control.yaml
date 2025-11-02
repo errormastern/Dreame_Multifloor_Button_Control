@@ -1214,82 +1214,53 @@ actions:
     then:
       - action: persistent_notification.create
         data:
-          title: "🔍 Debug: Function {{ triggered_function }}"
+          title: "🔍 {{ triggered_function|replace('_',' ')|title }} ({{ now().strftime('%H:%M:%S') }})"
           message: |
-            **Triggered Function:** {{ triggered_function }}
-            **Trigger Platform:** {{ trigger.platform }}
-            **Trigger ID:** {{ trigger.id | default('N/A') }}
-            {% if trigger.platform == 'device' %}
-            **Device Trigger Type:** {{ trigger.type | default('N/A') }}
-            **Device Trigger Subtype:** {{ trigger.subtype | default('N/A') }}
-            {% elif trigger.platform == 'mqtt' %}
-            **MQTT Topic:** {{ trigger.topic | default('N/A') }}
-            **MQTT Payload:** {{ trigger.payload_json | default('N/A') }}
-            {% elif trigger.platform == 'state' %}
-            **State Entity:** {{ trigger.entity_id | default('N/A') }}
-            **State To:** {{ trigger.to_state.state if trigger.to_state is defined else 'N/A' }}
+            ━━━━━━━━━━━━━━━━━━━━━━
+            **Trigger**
+            • Platform: {{ trigger.platform }}
+            • ID: {{ trigger.id | default('N/A') }}
+            {% if trigger.platform == 'state' %}• Entity: {{ trigger.entity_id | default('N/A') }}
+            • To: {{ trigger.to_state.state if trigger.to_state is defined else 'N/A' }}{% endif %}
+
+            ━━━━━━━━━━━━━━━━━━━━━━
+            **Robot**
+            • Status: {{ current_status }}
+            • Map: {{ current_map_name }}
+            • Mode: {{ current_mode }}
+            • Cleaning: {{ is_cleaning }}
+            • Paused: {{ is_paused }}
+
+            ━━━━━━━━━━━━━━━━━━━━━━
+            **Current Map**
+            • Name: {{ current_map_config.name | default('Unknown') }}
+            • Repeats: {{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) }}
+            • Base Station: {{ current_map_config.has_base_station | default(false) }}
+            • Segments: {{ map_segments | length }} ({{ segments_source }})
+            • IDs: {{ map_segments }}
+
+            ━━━━━━━━━━━━━━━━━━━━━━
+            **All Maps**
+            • **Map 1:** {{ map_config.map_1.name }}
+              - Repeats: {{ map_config.map_1.cleaning_repeats }}
+              - Base: {{ map_config.map_1.has_base_station }}
+            • **Map 2:** {{ map_config.map_2.name }}
+              - Repeats: {{ map_config.map_2.cleaning_repeats }}
+              - Base: {{ map_config.map_2.has_base_station }}
+            • **Map 3:** {{ map_config.map_3.name }}
+              - Repeats: {{ map_config.map_3.cleaning_repeats }}
+              - Base: {{ map_config.map_3.has_base_station }}
+
+            ━━━━━━━━━━━━━━━━━━━━━━
+            **Schedules**
+            • Schedule Trigger: {{ is_schedule_trigger }}
+            • Conflict: {{ schedule_conflict_detected }}
+            {% if is_schedule_trigger %}• Target: {{ schedule_trigger_map_name }} ({{ schedule_trigger_mode }})
             {% endif %}
-
-            **Robot Status:** {{ current_status }}
-            **Current Map:** {{ current_map_name }} ({{ current_map_id }})
-            **Cleaning Mode:** {{ current_mode }}
-
-            **Auto-Detected Maps:**
-            • Map 1: {{ map_1_name }}
-            • Map 2: {{ map_2_name }}
-            • Map 3: {{ map_3_name }}
-
-            **Base Station Map (Auto-Detected):** {{ base_station_map }}
-            **Is Current Map Base Station:** {{ is_base_station_map }}
-
-            **Is Cleaning:** {{ is_cleaning }}
-            **Is Paused:** {{ is_paused }}
-
-            **Rooms/Segments Available:** {{ has_segments }}
-            **Source:** {{ segments_source }}
-            **Room/Segment Count:** {{ map_segments | length }}
-            **Room/Segment IDs:** {{ map_segments }}
-
-            **--- Per-Map Configuration (v0.3.3+ - Schedule Integration) ---**
-            **Current Map Config:**
-            • Map Name: {{ current_map_config.name | default('Unknown') }}
-            • Cleaning Repeats: {{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) }}
-            • Has Base Station: {{ current_map_config.has_base_station | default(false) }}
-            • Sweep Schedule: {{ current_map_config.sweep_schedule | default('Not configured') }}
-            • Mop Schedule: {{ current_map_config.mop_schedule | default('Not configured') }}
-
-            **All Map Configs:**
-            • Map 1: {{ map_config.map_1.name }} (Repeats: {{ map_config.map_1.cleaning_repeats }}, Has Base: {{ map_config.map_1.has_base_station }}, Sweep: {{ map_config.map_1.sweep_schedule }}, Mop: {{ map_config.map_1.mop_schedule }})
-            • Map 2: {{ map_config.map_2.name }} (Repeats: {{ map_config.map_2.cleaning_repeats }}, Has Base: {{ map_config.map_2.has_base_station }}, Sweep: {{ map_config.map_2.sweep_schedule }}, Mop: {{ map_config.map_2.mop_schedule }})
-            • Map 3: {{ map_config.map_3.name }} (Repeats: {{ map_config.map_3.cleaning_repeats }}, Has Base: {{ map_config.map_3.has_base_station }}, Sweep: {{ map_config.map_3.sweep_schedule }}, Mop: {{ map_config.map_3.mop_schedule }})
-
-            **Segments (Dynamically extracted from current map):**
-            • Segments: {{ map_segments }}
-            • Has Segments: {{ has_segments }}
-            • Source: {{ segments_source }}
-
-            **--- Schedule Information (v0.3.3+) ---**
-            **Schedule Trigger Detection:**
-            • Is Schedule Trigger: {{ is_schedule_trigger }}
-            • Schedule Conflict Detected: {{ schedule_conflict_detected }}
-            {% if is_schedule_trigger %}
-            **Schedule Trigger Details:**
-            • Map: {{ schedule_trigger_map_name }}
-            • Mode: {{ schedule_trigger_mode }}
-            • Trigger ID: {{ trigger.id }}
-            {% endif %}
-
-            **Schedule States:**
-            • Map 1 Sweep: {{ states(map_1_sweep_schedule_entity) if map_1_sweep_schedule_entity else 'Not configured' }}
-            • Map 1 Mop: {{ states(map_1_mop_schedule_entity) if map_1_mop_schedule_entity else 'Not configured' }}
-            • Map 2 Sweep: {{ states(map_2_sweep_schedule_entity) if map_2_sweep_schedule_entity else 'Not configured' }}
-            • Map 2 Mop: {{ states(map_2_mop_schedule_entity) if map_2_mop_schedule_entity else 'Not configured' }}
-            • Map 3 Sweep: {{ states(map_3_sweep_schedule_entity) if map_3_sweep_schedule_entity else 'Not configured' }}
-            • Map 3 Mop: {{ states(map_3_mop_schedule_entity) if map_3_mop_schedule_entity else 'Not configured' }}
-
-            **Notification Configuration:**
-            • Scheduled Notifications Enabled: {{ scheduled_notification_enabled }}
-            • Pickup Notifications Enabled: {{ pickup_notification_enabled }}
+            **States:**
+            • Map 1: Sweep {{ states(map_1_sweep_schedule_entity) if map_1_sweep_schedule_entity else 'N/A' }} | Mop {{ states(map_1_mop_schedule_entity) if map_1_mop_schedule_entity else 'N/A' }}
+            • Map 2: Sweep {{ states(map_2_sweep_schedule_entity) if map_2_sweep_schedule_entity else 'N/A' }} | Mop {{ states(map_2_mop_schedule_entity) if map_2_mop_schedule_entity else 'N/A' }}
+            • Map 3: Sweep {{ states(map_3_sweep_schedule_entity) if map_3_sweep_schedule_entity else 'N/A' }} | Mop {{ states(map_3_mop_schedule_entity) if map_3_mop_schedule_entity else 'N/A' }}
 
   # ========================================
   # MAIN LOGIC - Function Routing (by trigger.id)
@@ -2420,25 +2391,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map1_sweep"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ [SKIP mop washing - sweep mode]
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • [SKIP mop washing - sweep mode]
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -2573,24 +2542,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map1_sweep"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ⏭️ [SKIP mop washing - sweep mode]
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • [SKIP mop washing - sweep mode]
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
@@ -2620,25 +2587,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map1_mop"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ Manual mop washing (~3min)
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • Manual mop washing (~3min)
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -2671,7 +2636,7 @@ actions:
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
             timeout: 60
             continue_on_timeout: false
-          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') not in ['washing', 'clean_add_water'] }}"
             timeout: 180
             continue_on_timeout: false
 
@@ -2780,24 +2745,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map1_mop"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ✅ Mops washed & tank filled
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • Mops washed & tank filled
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
@@ -2828,25 +2791,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map2_sweep"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ [SKIP mop washing - sweep mode]
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • [SKIP mop washing - sweep mode]
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -2981,24 +2942,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map2_sweep"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ⏭️ [SKIP mop washing - sweep mode]
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • [SKIP mop washing - sweep mode]
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
@@ -3029,25 +2988,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map2_mop"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ Manual mop washing (~3min)
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • Manual mop washing (~3min)
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -3080,7 +3037,7 @@ actions:
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
             timeout: 60
             continue_on_timeout: false
-          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') not in ['washing', 'clean_add_water'] }}"
             timeout: 180
             continue_on_timeout: false
 
@@ -3191,24 +3148,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map2_mop"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ✅ Mops washed & tank filled
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • Mops washed & tank filled
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
@@ -3239,25 +3194,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map3_sweep"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ [SKIP mop washing - sweep mode]
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • [SKIP mop washing - sweep mode]
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -3392,24 +3345,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map3_sweep"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ⏭️ [SKIP mop washing - sweep mode]
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • [SKIP mop washing - sweep mode]
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
@@ -3440,25 +3391,23 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "⚙️ Preparation Started"
+                  title: "⚙️ Preparation Started ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map3_mop"
                   message: |
-                    # 🎯 PREPARATION WORKFLOW
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Target Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Repeats:** {{ notification_cleaning_repeats }}x
 
-                    # ⏳ WORKFLOW STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ⏺️ Disable customized_cleaning
-                    ⏺️ Manage self_clean switch
-                    ⏺️ Set cleaning mode
-                    ⏺️ Manual mop washing (~3min)
-                    ⏺️ Start segment cleaning
-                    ⏺️ Pause after {{ pause_delay_after_undock }}s
-                    ⏺️ Switch to target map
-                    ⏺️ Restore settings
+                    **Workflow Steps:**
+                    • Disable customized_cleaning
+                    • Manage self_clean switch
+                    • Set cleaning mode
+                    • Manual mop washing (~3min)
+                    • Start segment cleaning
+                    • Pause after {{ pause_delay_after_undock }}s
+                    • Switch to target map
+                    • Restore settings
 
                     **Status:** In Progress... ⏳
 
@@ -3491,7 +3440,7 @@ actions:
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
             timeout: 60
             continue_on_timeout: false
-          - wait_template: "{{ is_state('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status', 'idle') }}"
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') not in ['washing', 'clean_add_water'] }}"
             timeout: 180
             continue_on_timeout: false
 
@@ -3602,24 +3551,22 @@ actions:
             then:
               - action: persistent_notification.create
                 data:
-                  title: "✅ Preparation Complete"
+                  title: "✅ Preparation Complete ({{ now().strftime('%H:%M:%S') }})"
                   notification_id: "vacuum_prepare_map3_mop"
                   message: |
-                    # ✅ READY FOR TRANSPORT
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ━━━━━━━━━━━━━━━━━━━━━━
                     **Map:** {{ notification_target_map_name }}
                     **Mode:** {{ notification_target_mode }}
                     **Status:** Paused & Ready 🎯
 
-                    # 📋 COMPLETED STEPS
-                    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                    ✅ customized_cleaning managed
-                    ✅ self_clean switch controlled
-                    ✅ Cleaning mode set
-                    ✅ Mops washed & tank filled
-                    ✅ Robot undocked & paused
-                    ✅ Map switched to target
-                    ✅ Settings restored
+                    **Completed Steps:**
+                    • customized_cleaning managed
+                    • self_clean switch controlled
+                    • Cleaning mode set
+                    • Mops washed & tank filled
+                    • Robot undocked & paused
+                    • Map switched to target
+                    • Settings restored
 
                     🚚 Transport robot to {{ notification_target_map_name }} and resume cleaning
 
