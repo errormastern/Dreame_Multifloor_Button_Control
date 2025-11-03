@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.5 (Alpha - Multi-Indicator Undocking + Status Fix)**
+    **Version: 0.4.7 (Alpha - Fixed Status Detection)**
 
     Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
     Intelligent customized_cleaning management enables reliable mode setting across all maps.
@@ -48,23 +48,25 @@ blueprint:
               multiple: false
 
         pause_delay_after_undock:
-          name: "Pause Delay After Undocking"
+          name: "Pause Delay After Start"
           description: |
-            Wait time after robot leaves charging station before pausing for manual transport.
+            Wait time after starting cleaning before pausing for manual transport.
+            Allows robot to move away from base station for easier pickup.
 
-            • **0s:** Immediate pause
-            • **1s:** Recommended (robot already ~10cm away after undocking)
-            • **2-5s:** Extended delay for slower undocking
+            • **0s:** Skip start entirely (robot stays docked)
+            • **1-3s:** Short delay (robot slightly away from dock)
+            • **4-5s:** Recommended (robot well clear of dock, easy to grab)
+            • **6-10s:** Extended delay (robot moves further from base station)
 
             Only applies to non-base station maps.
           selector:
             number:
               min: 0.0
-              max: 5.0
-              step: 0.1
+              max: 10.0
+              step: 0.5
               unit_of_measurement: "s"
               mode: slider
-          default: 1.0
+          default: 4.5
 
     # ========================================
     # MAP 1 CONFIGURATION
@@ -752,22 +754,6 @@ blueprint:
               mode: slider
           default: 120
 
-        undocking_timeout:
-          name: "⏱️ Undocking Timeout"
-          description: |
-            Wait time for robot to leave charging station (10-60 seconds).
-            Only applies to non-base station maps with sweep+mop mode.
-
-            Automation continues on timeout (pauses immediately).
-          selector:
-            number:
-              min: 10
-              max: 60
-              step: 5
-              unit_of_measurement: "s"
-              mode: slider
-          default: 30
-
         # ============================================
         # MODE VALUES
         # ============================================
@@ -1125,7 +1111,6 @@ variables:
   # Dynamic timeout selection based on cleaning mode
   start_timeout: "{{ mop_start_timeout if current_mode == mode_sweeping_mopping else sweep_start_timeout }}"
   moistening_timeout: !input moistening_timeout
-  undocking_timeout: !input undocking_timeout
   use_segment_service: !input use_segment_service
   debug_mode: !input debug_mode
 
@@ -1187,7 +1172,7 @@ variables:
   schedule_conflict_detected: >
     {% if is_schedule_trigger %}
       {# Check if robot is currently cleaning (excluding paused state) #}
-      {% set is_currently_cleaning = state_attr(vacuum_entity, 'status') in cleaning_states and state_attr(vacuum_entity, 'status') != paused_state %}
+      {% set is_currently_cleaning = states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states and states('sensor.' ~ vacuum_base_name ~ '_status') != paused_state %}
       {{ is_currently_cleaning }}
     {% else %}
       false
@@ -1509,13 +1494,80 @@ actions:
                               title: "🔧 Self-Clean Enabled"
                               message: "Preparing robot at station (moistening mops for sweep+mop mode)..."
 
+                  # Skip start if delay=0 (keep robot docked)
+                  - if:
+                      - condition: template
+                        value_template: "{{ pause_delay_after_undock == 0 }}"
+                    then:
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏸️ Start Skipped"
+                              message: "Delay is 0s - robot stays docked. Set delay > 0 to enable transport mode."
+                      - stop: "Delay is 0, robot stays docked"
+
                   # Initialize timing variables
                   - variables:
-                      timing_start_cleaning: "{{ now().timestamp() }}"
-                      timing_start_moistening: null
-                      timing_start_undocking: null
+                      timing_start: "{{ now().timestamp() }}"
+                      timing_start_washing: null
                       timing_start_delay: null
                       timeout_step: null
+
+                  # Sweep+Mop: Wait for washing to complete BEFORE starting
+                  - if:
+                      - condition: template
+                        value_template: "{{ current_mode == mode_sweeping_mopping }}"
+                    then:
+                      - variables:
+                          timing_start_washing: "{{ now().timestamp() }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "🚿 Waiting for Washing"
+                              message: "Self-clean active - waiting for mop washing to complete..."
+
+                      # Wait for washing status to appear
+                      - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'washing' }}"
+                        timeout:
+                          seconds: 60
+                        continue_on_timeout: true
+
+                      # Wait for washing status to end
+                      - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') != 'washing' }}"
+                        timeout:
+                          seconds: "{{ moistening_timeout }}"
+                        continue_on_timeout: true
+
+                      - variables:
+                          timing_end_washing: "{{ now().timestamp() }}"
+                          duration_washing: "{{ (timing_end_washing - timing_start_washing) | round(1) }}"
+                          timeout_step: "{{ 'washing' if not wait.completed and timeout_step is none else timeout_step }}"
+
+                      - if:
+                          - condition: template
+                            value_template: "{{ debug_mode }}"
+                        then:
+                          - action: persistent_notification.create
+                            data:
+                              title: "⏱️ Timing: Washing Complete"
+                              message: "Duration: {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
+
+                  # Start cleaning (both sweep-only and sweep+mop)
+                  - if:
+                      - condition: template
+                        value_template: "{{ debug_mode }}"
+                    then:
+                      - action: persistent_notification.create
+                        data:
+                          title: "🚀 Starting Cleaning"
+                          message: "Mode: {{ current_mode | replace('_', ' ') | title }}\nMap: {{ current_map_name }}"
 
                   - if:
                       - condition: template
@@ -1532,16 +1584,9 @@ actions:
                         target:
                           entity_id: "{{ vacuum_entity }}"
 
-                  # Wait for cleaning status
-                  - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
-                    timeout:
-                      seconds: "{{ start_timeout }}"
-                    continue_on_timeout: false
-
+                  # Delay to allow robot to move away from station
                   - variables:
-                      timing_end_cleaning: "{{ now().timestamp() }}"
-                      duration_start_cleaning: "{{ (timing_end_cleaning - timing_start_cleaning) | round(1) }}"
-                      timeout_step: "{{ 'start_cleaning' if not wait.completed else timeout_step }}"
+                      timing_start_delay: "{{ now().timestamp() }}"
 
                   - if:
                       - condition: template
@@ -1549,102 +1594,15 @@ actions:
                     then:
                       - action: persistent_notification.create
                         data:
-                          title: "⏱️ Timing: Start Cleaning"
-                          message: "Duration: {{ duration_start_cleaning }}s / {{ start_timeout }}s{{ ' (TIMEOUT)' if not wait.completed else '' }}"
+                          title: "⏱️ Delay Timer Started"
+                          message: "Waiting {{ pause_delay_after_undock }}s for robot to move away from station..."
 
-                  # Optional: Wait for moistening (for sweep+mop)
-                  - if:
-                      - condition: template
-                        value_template: "{{ current_mode == mode_sweeping_mopping and moistening_status != '' }}"
-                    then:
-                      - variables:
-                          timing_start_moistening: "{{ now().timestamp() }}"
+                  - delay:
+                      seconds: "{{ pause_delay_after_undock }}"
 
-                      - wait_template: "{{ state_attr(vacuum_entity, 'status') == moistening_status }}"
-                        timeout:
-                          seconds: "{{ moistening_timeout }}"
-                        continue_on_timeout: true
-
-                      - variables:
-                          timing_end_moistening: "{{ now().timestamp() }}"
-                          duration_moistening: "{{ (timing_end_moistening - timing_start_moistening) | round(1) }}"
-                          timeout_step: "{{ 'moistening' if not wait.completed and timeout_step is none else timeout_step }}"
-
-                      - if:
-                          - condition: template
-                            value_template: "{{ debug_mode }}"
-                        then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "⏱️ Timing: Moistening"
-                              message: "Duration: {{ duration_moistening }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
-
-                  # Wait until robot has left charging station
-                  - if:
-                      - condition: template
-                        value_template: "{{ has_value(charging_status_sensor) }}"
-                    then:
-                      - variables:
-                          timing_start_undocking: "{{ now().timestamp() }}"
-
-                      - if:
-                          - condition: template
-                            value_template: "{{ debug_mode }}"
-                        then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "⏳ Waiting for Undocking"
-                              message: "Waiting for robot to leave charging station..."
-
-                      - wait_template: >
-                          {{ (states('sensor.' ~ vacuum_base_name ~ '_state') in ['sweeping', 'mopping']
-                              or (states('sensor.' ~ vacuum_base_name ~ '_state') == 'sweeping_and_mopping'
-                                  and states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'idle'))
-                             or states('sensor.' ~ vacuum_base_name ~ '_status') == 'room_cleaning'
-                             or (states('sensor.' ~ vacuum_base_name ~ '_dust_collection') == 'not_available'
-                                 and states('sensor.' ~ vacuum_base_name ~ '_state') not in ['washing'])
-                             or states(charging_status_sensor) == 'not_charging' }}
-                        timeout:
-                          seconds: "{{ undocking_timeout }}"
-                        continue_on_timeout: true
-
-                      - variables:
-                          timing_end_undocking: "{{ now().timestamp() }}"
-                          duration_undocking: "{{ (timing_end_undocking - timing_start_undocking) | round(1) }}"
-                          timeout_step: "{{ 'undocking' if not wait.completed and timeout_step is none else timeout_step }}"
-
-                      - if:
-                          - condition: template
-                            value_template: "{{ debug_mode }}"
-                        then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "⏱️ Timing: Undocking"
-                              message: "Duration: {{ duration_undocking }}s / {{ undocking_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
-
-                  # Optional delay after undocking for easier pickup
-                  - if:
-                      - condition: template
-                        value_template: "{{ pause_delay_after_undock > 0 }}"
-                    then:
-                      - variables:
-                          timing_start_delay: "{{ now().timestamp() }}"
-
-                      - if:
-                          - condition: template
-                            value_template: "{{ debug_mode }}"
-                        then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "⏱️ Post-Undock Delay"
-                              message: "Waiting {{ pause_delay_after_undock }}s for robot to move away from station..."
-
-                      - delay:
-                          seconds: "{{ pause_delay_after_undock }}"
-
-                      - variables:
-                          timing_end_delay: "{{ now().timestamp() }}"
-                          duration_delay: "{{ (timing_end_delay - timing_start_delay) | round(1) }}"
+                  - variables:
+                      timing_end_delay: "{{ now().timestamp() }}"
+                      duration_delay: "{{ (timing_end_delay - timing_start_delay) | round(1) }}"
 
                   # Pause for manual transport
                   - action: vacuum.pause
@@ -1687,18 +1645,14 @@ actions:
                           title: "📊 Timing Summary - Non-Base Station Start"
                           message: |
                             **Step Durations:**
-                            • Start → Cleaning: {{ duration_start_cleaning }}s / {{ start_timeout }}s{{ ' ⚠️ TIMEOUT' if timeout_step == 'start_cleaning' else ' ✅' }}
-                            {% if timing_start_moistening is not none %}
-                            • Moistening: {{ duration_moistening }}s / {{ moistening_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'moistening' else ' ✅' }}
-                            {% endif %}
-                            {% if timing_start_undocking is not none %}
-                            • Undocking: {{ duration_undocking }}s / {{ undocking_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'undocking' else ' ✅' }}
+                            {% if timing_start_washing is not none %}
+                            • Washing (Mop Prep): {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'washing' else ' ✅' }}
                             {% endif %}
                             {% if timing_start_delay is not none %}
-                            • Post-Undock Delay: {{ duration_delay }}s
+                            • Delay (Robot Movement): {{ duration_delay }}s
                             {% endif %}
 
-                            **Total Time:** {{ (now().timestamp() - timing_start_cleaning) | round(1) }}s
+                            **Total Time:** {{ (now().timestamp() - timing_start) | round(1) }}s
 
                             {% if timeout_step is not none %}
                             **⚠️ Timeout Occurred:** {{ timeout_step }}
@@ -2419,7 +2373,7 @@ actions:
       # 3. Set cleaning mode
       # 4. [SKIP mop washing - sweep-only mode]
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -2513,15 +2467,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -2608,7 +2563,7 @@ actions:
       # 3. Set cleaning mode
       # 4. Manual mop washing with button press
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -2711,15 +2666,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -2804,7 +2760,7 @@ actions:
       # 3. Set cleaning mode
       # 4. [SKIP mop washing - sweep-only mode]
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -2898,15 +2854,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -2993,7 +2950,7 @@ actions:
       # 3. Set cleaning mode
       # 4. Manual mop washing with button press
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -3097,15 +3054,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3192,7 +3150,7 @@ actions:
       # 3. Set cleaning mode
       # 4. [SKIP mop washing - sweep-only mode]
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -3286,15 +3244,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3381,7 +3340,7 @@ actions:
       # 3. Set cleaning mode
       # 4. Manual mop washing with button press
       # 5. Start segment cleaning
-      # 6. Pause after undock delay
+      # 6. Pause after delay
       # 7. Switch to target map
       # 8. Restore settings after map switch
       - conditions:
@@ -3485,15 +3444,16 @@ actions:
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
-          # Step 6: Wait for cleaning state & pause
-          - wait_template: "{{ state_attr(vacuum_entity, 'status') in cleaning_states }}"
+          # Step 6: Wait for cleaning state, delay, then pause
+          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states }}"
             timeout: 120
             continue_on_timeout: false
-          # Wait for robot to physically leave charging contacts (critical - abort if fails)
-          - wait_template: "{{ is_state('binary_sensor.' ~ vacuum_base_name ~ '_charging_state', 'off') }}"
-            timeout: "{{ undocking_timeout }}"
-            continue_on_timeout: false
-          # Pause immediately after undocking
+          # Optional delay before pause (prevents wet floors before base station)
+          - if: "{{ pause_delay_after_undock > 0 }}"
+            then:
+              - delay:
+                  seconds: "{{ pause_delay_after_undock }}"
+          # Pause for manual transport
           - action: vacuum.pause
             target:
               entity_id: "{{ vacuum_entity }}"
@@ -3640,7 +3600,7 @@ actions:
                     **Cleaning started externally**
 
                     **Map:** {{ states(selected_map_select) }}
-                    **Status:** {{ state_attr(vacuum_entity, 'status') }}
+                    **Status:** {{ states('sensor.' ~ vacuum_base_name ~ '_status') }}
                     **Source:** Outside blueprint workflow
 
       # ========================================
