@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.0**
+    **Version: 0.5.1**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -998,6 +998,7 @@ variables:
   map_camera: "camera.{{ vacuum_base_name }}_map"
   self_clean_switch: "switch.{{ vacuum_base_name }}_self_clean"
   charging_status_sensor: "sensor.{{ vacuum_base_name }}_charging_status"
+  stop_drying_button: "button.{{ vacuum_base_name }}_manual_drying"
 
   # ========================================
   # MAP CONFIGURATION (Fully Auto-Detected)
@@ -1481,6 +1482,37 @@ actions:
                       - condition: template
                         value_template: "{{ has_value(self_clean_switch) and current_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
                     then:
+                      # Stop drying if in progress (2h process must be aborted for immediate start)
+                      - if:
+                          - condition: template
+                            value_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'drying' }}"
+                        then:
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "🛑 Stopping Drying"
+                                  message: "Drying in progress - aborting to start mop washing..."
+
+                          - action: button.press
+                            target:
+                              entity_id: "{{ stop_drying_button }}"
+
+                          - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') != 'drying' }}"
+                            timeout: 10
+                            continue_on_timeout: true
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "✅ Drying Stopped"
+                                  message: "Base station ready for mop washing"
+
                       - action: switch.turn_on
                         target:
                           entity_id: "{{ self_clean_switch }}"
