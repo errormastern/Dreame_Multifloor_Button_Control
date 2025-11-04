@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.5**
+    **Version: 0.5.6**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -806,15 +806,16 @@ blueprint:
           default: ""
 
         paused_state:
-          name: "🔍 Paused State"
+          name: "🔍 Paused States"
           description: |
-            Status value when robot is paused.
+            Comma-separated status values when robot is paused (e.g., "paused,sleeping").
             Used for resume logic in smart start/pause function.
 
-            Check your vacuum's `sensor.{name}_status` for actual value.
+            **Common values:** paused, sleeping
+            Check your vacuum's `sensor.{name}_status` for actual values.
           selector:
             text:
-          default: "paused"
+          default: "paused,sleeping"
 
         # ============================================
         # DEBUG
@@ -1080,12 +1081,13 @@ variables:
   global_cleaning_repeats: !input global_cleaning_repeats
   cleaning_states_raw: !input cleaning_states
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
-  paused_state: !input paused_state
+  paused_states_raw: !input paused_state
+  paused_states: "{{ paused_states_raw.split(',') }}"
 
   # ========================================
   # ENTITY STATE CHECKS
   # ========================================
-  # IMPORTANT: These must come AFTER cleaning_states/paused_state definition
+  # IMPORTANT: These must come AFTER cleaning_states/paused_states definition
   current_status: "{{ states('sensor.' ~ vacuum_base_name ~ '_status') }}"
   current_mode: "{{ states(cleaning_mode_select) }}"
   current_map_name: "{{ states(selected_map_select) }}"
@@ -1102,7 +1104,7 @@ variables:
   # Boolean Evaluations with robust defaults
   is_base_station_map: "{{ current_map_config.has_base_station | default(false) if current_map_config is mapping else (current_map_name == base_station_map) }}"
   is_cleaning: "{{ current_status in cleaning_states }}"
-  is_paused: "{{ current_status == paused_state }}"
+  is_paused: "{{ current_status in paused_states }}"
 
   # Per-map cleaning repeats take priority, fall back to global setting
   repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
@@ -1173,8 +1175,8 @@ variables:
   # Only 1 schedule can be active at a time (silent abort on conflict)
   schedule_conflict_detected: >
     {% if is_schedule_trigger %}
-      {# Check if robot is currently cleaning (excluding paused state) #}
-      {% set is_currently_cleaning = states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states and states('sensor.' ~ vacuum_base_name ~ '_status') != paused_state %}
+      {# Check if robot is currently cleaning (excluding paused states) #}
+      {% set is_currently_cleaning = states('sensor.' ~ vacuum_base_name ~ '_status') in cleaning_states and states('sensor.' ~ vacuum_base_name ~ '_status') not in paused_states %}
       {{ is_currently_cleaning }}
     {% else %}
       false
