@@ -1,17 +1,19 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.6.0**
+    **Version: 0.7.0**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
 
+    **v0.7.0 Changes:** Extended Advanced Settings - error detection, idle states, base warnings, standby handling
+
     **Main Features:**
-    • 🤖 Auto-detection of vacuum entities (select vacuum, rest auto-detected)
-    • 📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)
-    • 🔔 Notification workflow with action buttons for transport preparation
-    • ⏭️ Manual control via MQTT, device triggers, state changes, or events
-    • 🗺️ Segment-based Map cleaning with configurable repeats
+    🤖 Auto-detection of vacuum entities (select vacuum, rest auto-detected)
+    📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)
+    🔔 Notification workflow with action buttons for transport preparation
+    ⏭️ Manual control via MQTT, device triggers, state changes, or events
+    🗺️ Segment-based Map cleaning with configurable repeats
 
     **Requirements:**
     • Home Assistant ≥ 2024.10.0
@@ -806,17 +808,58 @@ blueprint:
             text:
           default: ""
 
-        paused_state:
+        paused_states:
           name: "🔍 Paused States"
           description: |
-            Comma-separated status values when robot is paused (e.g., "paused,sleeping").
+            Comma-separated status values when robot is paused.
             Used for resume logic in smart start/pause function.
 
-            **Common values:** paused, sleeping
-            Check your vacuum's `sensor.{name}_status` for actual values.
+            **Common values:** paused, sleeping, standby
+            **Default:** `paused,sleeping,standby`
+
+            Check your `sensor.{name}_status` for actual values.
           selector:
             text:
-          default: "paused,sleeping"
+          default: "paused,sleeping,standby"
+
+        error_states:
+          name: "🔍 Error States"
+          description: |
+            Comma-separated status values indicating robot error conditions.
+            Blueprint will show persistent notification with error info.
+
+            **Default:** `error`
+
+            Leave empty to disable error monitoring.
+          selector:
+            text:
+          default: "error"
+
+        idle_states:
+          name: "🔍 Idle States"
+          description: |
+            Comma-separated status values when robot is idle/ready.
+            Used for status detection in smart start logic.
+
+            **Common values:** idle, sleeping, standby
+            **Default:** `idle,sleeping,standby`
+          selector:
+            text:
+          default: "idle,sleeping,standby"
+
+        base_warning_states:
+          name: "🔍 Base Station Warning States"
+          description: |
+            Comma-separated base station status values requiring attention.
+            Shows persistent notification for tank empty, washing paused, etc.
+
+            **Common values:** paused, clean_add_water
+            **Default:** `paused,clean_add_water`
+
+            Leave empty to disable base station monitoring.
+          selector:
+            text:
+          default: "paused,clean_add_water"
 
         # ============================================
         # DEBUG
@@ -1082,8 +1125,14 @@ variables:
   global_cleaning_repeats: !input global_cleaning_repeats
   cleaning_states_raw: !input cleaning_states
   cleaning_states: "{{ cleaning_states_raw.split(',') }}"
-  paused_states_raw: !input paused_state
+  paused_states_raw: !input paused_states
   paused_states: "{{ paused_states_raw.split(',') }}"
+  error_states_raw: !input error_states
+  error_states: "{{ error_states_raw.split(',') if error_states_raw else [] }}"
+  idle_states_raw: !input idle_states
+  idle_states: "{{ idle_states_raw.split(',') if idle_states_raw else [] }}"
+  base_warning_states_raw: !input base_warning_states
+  base_warning_states: "{{ base_warning_states_raw.split(',') if base_warning_states_raw else [] }}"
 
   # ========================================
   # ENTITY STATE CHECKS
@@ -1106,6 +1155,10 @@ variables:
   is_base_station_map: "{{ current_map_config.has_base_station | default(false) if current_map_config is mapping else (current_map_name == base_station_map) }}"
   is_cleaning: "{{ current_status in cleaning_states }}"
   is_paused: "{{ current_status in paused_states and states(vacuum_entity) != 'docked' }}"
+  is_error: "{{ current_status in error_states }}"
+  is_idle: "{{ current_status in idle_states }}"
+  current_base_status: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') }}"
+  is_base_warning: "{{ current_base_status in base_warning_states }}"
 
   # Per-map cleaning repeats take priority, fall back to global setting
   repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
@@ -1290,6 +1343,57 @@ actions:
             **Trigger:** {{ is_schedule_trigger }}
             **Conflict:** {{ schedule_conflict_detected }}{% if is_schedule_trigger %}
             **Target:** {{ schedule_trigger_map_name }} ({{ schedule_trigger_mode }}){% endif %}
+
+  # ========================================
+  # ERROR AND WARNING DETECTION
+  # ========================================
+  # Check error/warning states first, before processing functions
+  # Allows early exit with notification if robot in critical state
+  - choose:
+      # ========================================
+      # ERROR STATE DETECTED
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ is_error }}"
+        sequence:
+          - action: persistent_notification.create
+            data:
+              title: "⚠️ Robot Error: {{ robot_name }}"
+              message: |
+                **Robot is in error state!**
+
+                **Status:** {{ current_status }}
+                **Vacuum State:** {{ states(vacuum_entity) }}
+
+                Check robot for issues (stuck, bin full, etc.) and clear error before retrying.
+              notification_id: "dreame_error_{{ vacuum_base_name }}"
+          - stop: "Robot in error state, aborting automation"
+
+      # ========================================
+      # BASE STATION WARNING DETECTED
+      # ========================================
+      - conditions:
+          - condition: template
+            value_template: "{{ is_base_warning }}"
+        sequence:
+          - action: persistent_notification.create
+            data:
+              title: "⚠️ Base Station Warning: {{ robot_name }}"
+              message: |
+                **Base station requires attention!**
+
+                **Base Status:** {{ current_base_status }}
+
+                {% if current_base_status == 'clean_add_water' -%}
+                **Issue:** Water tank empty - refill clean water tank.
+                {% elif current_base_status == 'paused' -%}
+                **Issue:** Washing paused - check base station for blockage.
+                {% else -%}
+                **Issue:** {{ current_base_status }}
+                {% endif %}
+              notification_id: "dreame_base_warning_{{ vacuum_base_name }}"
+          - stop: "Base station warning, aborting automation"
 
   # ========================================
   # MAIN LOGIC - Function Routing (by trigger.id)
