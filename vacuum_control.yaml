@@ -1,10 +1,10 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.4.7 (Alpha - Fixed Status Detection)**
+    **Version: 0.5.0**
 
-    Multi-floor control for Dreame vacuum cleaners with simplified preparation workflow.
-    Intelligent customized_cleaning management enables reliable mode setting across all maps.
+    Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
+    Intelligent washing detection and configurable delay for easy robot pickup.
 
     **Main Features:**
     • 🤖 Auto-detection of vacuum entities (select vacuum, rest auto-detected)
