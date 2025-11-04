@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.3**
+    **Version: 0.5.4**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -1390,7 +1390,7 @@ actions:
                       - action: persistent_notification.create
                         data:
                           title: "⏸️ Robot Paused"
-                          message: "Previous status: {{ current_status }}"
+                          message: "⏱ {{ now().strftime('%H:%M:%S') }}\nPrevious: {{ current_status }}"
 
               # Robot is paused → Resume
               - conditions:
@@ -1408,7 +1408,7 @@ actions:
                       - action: persistent_notification.create
                         data:
                           title: "▶️ Robot Resumed"
-                          message: "Cleaning continues"
+                          message: "⏱ {{ now().strftime('%H:%M:%S') }}\nCleaning continues"
 
             # Default: Robot idle → Start Cleaning
             default:
@@ -1435,7 +1435,7 @@ actions:
                               - action: persistent_notification.create
                                 data:
                                   title: "🔧 Self-Clean Enabled"
-                                  message: "Self-clean enabled - robot can return to station during cleaning (moistening only if sweep+mop mode)."
+                                  message: "⏱ {{ now().strftime('%H:%M:%S') }}\nRobot can return to station during cleaning"
 
                       - if:
                           - condition: template
@@ -1495,7 +1495,7 @@ actions:
                               - action: persistent_notification.create
                                 data:
                                   title: "🛑 Stopping Drying"
-                                  message: "Drying in progress - aborting to start mop washing..."
+                                  message: "⏱ {{ now().strftime('%H:%M:%S') }}\nAborting 2h drying process..."
 
                           - action: button.press
                             target:
@@ -1512,7 +1512,7 @@ actions:
                               - action: persistent_notification.create
                                 data:
                                   title: "✅ Drying Stopped"
-                                  message: "Base station ready for mop washing"
+                                  message: "⏱ {{ now().strftime('%H:%M:%S') }}\nStation ready for washing"
 
                       # Start manual mop washing (only if switch not already on)
                       - if:
@@ -1530,7 +1530,7 @@ actions:
                               - action: persistent_notification.create
                                 data:
                                   title: "🚿 Starting Mop Washing"
-                                  message: "Manual self-clean triggered - mop washing will start now..."
+                                  message: "⏱ {{ now().strftime('%H:%M:%S') }}\nManual washing triggered"
 
                   # Skip start if delay=0 (keep robot docked)
                   - if:
@@ -1544,7 +1544,7 @@ actions:
                           - action: persistent_notification.create
                             data:
                               title: "⏸️ Start Skipped"
-                              message: "Delay is 0s - robot stays docked. Set delay > 0 to enable transport mode."
+                              message: "⏱ {{ now().strftime('%H:%M:%S') }}\nDelay = 0s, robot stays docked"
                       - stop: "Delay is 0, robot stays docked"
 
                   # Initialize timing variables
@@ -1569,7 +1569,7 @@ actions:
                           - action: persistent_notification.create
                             data:
                               title: "🚿 Waiting for Washing"
-                              message: "Self-clean active - waiting for mop washing to complete..."
+                              message: "⏱ {{ now().strftime('%H:%M:%S') }}\nWaiting for washing to complete..."
 
                       # Wait for washing status to appear
                       - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'washing' }}"
@@ -1595,7 +1595,7 @@ actions:
                           - action: persistent_notification.create
                             data:
                               title: "⏱️ Timing: Washing Complete"
-                              message: "Duration: {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT - continuing)' if not wait.completed else '' }}"
+                              message: "⏱ {{ now().strftime('%H:%M:%S') }}\nDuration: {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT)' if not wait.completed else '' }}"
 
                   # Start cleaning (both sweep-only and sweep+mop)
                   - if:
@@ -1605,7 +1605,7 @@ actions:
                       - action: persistent_notification.create
                         data:
                           title: "🚀 Starting Cleaning"
-                          message: "Mode: {{ current_mode | replace('_', ' ') | title }}\nMap: {{ current_map_name }}"
+                          message: "⏱ {{ now().strftime('%H:%M:%S') }}\nMode: {{ current_mode | replace('_', ' ') | title }}\nMap: {{ current_map_name }}"
 
                   - if:
                       - condition: template
@@ -1633,7 +1633,7 @@ actions:
                       - action: persistent_notification.create
                         data:
                           title: "⏱️ Delay Timer Started"
-                          message: "Waiting {{ pause_delay_after_undock }}s for robot to move away from station..."
+                          message: "⏱ {{ now().strftime('%H:%M:%S') }}\nWaiting {{ pause_delay_after_undock }}s for robot movement..."
 
                   - delay:
                       seconds: "{{ pause_delay_after_undock }}"
@@ -1663,7 +1663,7 @@ actions:
                           - action: persistent_notification.create
                             data:
                               title: "🔧 Self-Clean Disabled"
-                              message: "Self-clean disabled - robot will not return to station during cleaning."
+                              message: "⏱ {{ now().strftime('%H:%M:%S') }}\nRobot will not return to station"
 
                   - if:
                       - condition: template
@@ -1672,31 +1672,21 @@ actions:
                       - action: persistent_notification.create
                         data:
                           title: "⏸️ Robot Paused for Transport"
-                          message: |
-                            Map: {{ current_map_name }}
-                            Please transport the robot to the target map.
-                            Press button again to resume.
+                          message: "⏱ {{ now().strftime('%H:%M:%S') }}\nMap: {{ current_map_name }}\nTransport robot & press button to resume"
 
                       # Timing Summary
                       - action: persistent_notification.create
                         data:
-                          title: "📊 Timing Summary - Non-Base Station Start"
+                          title: "📊 Timing Summary"
                           message: |
-                            **Step Durations:**
+                            ⏱ {{ now().strftime('%H:%M:%S') }}
                             {% if timing_start_washing is not none %}
-                            • Washing (Mop Prep): {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' ⚠️ TIMEOUT (continued)' if timeout_step == 'washing' else ' ✅' }}
+                            • Washing: {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT)' if timeout_step == 'washing' else '' }}
                             {% endif %}
                             {% if timing_start_delay is not none %}
-                            • Delay (Robot Movement): {{ duration_delay }}s
+                            • Delay: {{ duration_delay }}s
                             {% endif %}
-
-                            **Total Time:** {{ (now().timestamp() - timing_start) | round(1) }}s
-
-                            {% if timeout_step is not none %}
-                            **⚠️ Timeout Occurred:** {{ timeout_step }}
-                            {% else %}
-                            **Status:** All steps completed successfully
-                            {% endif %}
+                            Total: {{ (now().timestamp() - timing_start) | round(1) }}s
 
       # ========================================
       # FUNCTION 4: Map 1 Switch (fn_map1)
