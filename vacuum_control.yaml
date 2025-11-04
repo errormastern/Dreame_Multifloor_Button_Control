@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.4**
+    **Version: 0.5.5**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -1514,23 +1514,19 @@ actions:
                                   title: "✅ Drying Stopped"
                                   message: "⏱ {{ now().strftime('%H:%M:%S') }}\nStation ready for washing"
 
-                      # Start manual mop washing (only if switch not already on)
+                      # Start manual mop washing (always trigger in sweep+mop mode)
+                      - action: button.press
+                        target:
+                          entity_id: "{{ self_clean_button }}"
+
                       - if:
                           - condition: template
-                            value_template: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'off') }}"
+                            value_template: "{{ debug_mode }}"
                         then:
-                          - action: button.press
-                            target:
-                              entity_id: "{{ self_clean_button }}"
-
-                          - if:
-                              - condition: template
-                                value_template: "{{ debug_mode }}"
-                            then:
-                              - action: persistent_notification.create
-                                data:
-                                  title: "🚿 Starting Mop Washing"
-                                  message: "⏱ {{ now().strftime('%H:%M:%S') }}\nManual washing triggered"
+                          - action: persistent_notification.create
+                            data:
+                              title: "🚿 Starting Mop Washing"
+                              message: "⏱ {{ now().strftime('%H:%M:%S') }}\nManual washing triggered"
 
                   # Skip start if delay=0 (keep robot docked)
                   - if:
