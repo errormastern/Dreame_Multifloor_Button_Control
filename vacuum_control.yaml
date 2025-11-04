@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.2**
+    **Version: 0.5.3**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -1477,13 +1477,13 @@ actions:
 
                 # On other map → Start and pause (for manual transport)
                 default:
-                  # Enable self_clean ONLY for sweep+mop mode (for moistening)
+                  # Sweep+Mop mode: Prepare base station for mop washing
                   # For sweep-only, self_clean stays OFF (no moistening needed)
                   - if:
                       - condition: template
-                        value_template: "{{ has_value(self_clean_switch) and current_mode == mode_sweeping_mopping and is_state(self_clean_switch, 'off') }}"
+                        value_template: "{{ current_mode == mode_sweeping_mopping }}"
                     then:
-                      # Stop drying if in progress (2h process must be aborted for immediate start)
+                      # ALWAYS check and stop drying first (2h process must be aborted for immediate start)
                       - if:
                           - condition: template
                             value_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') == 'drying' }}"
@@ -1514,18 +1514,23 @@ actions:
                                   title: "✅ Drying Stopped"
                                   message: "Base station ready for mop washing"
 
-                      - action: button.press
-                        target:
-                          entity_id: "{{ self_clean_button }}"
-
+                      # Start manual mop washing (only if switch not already on)
                       - if:
                           - condition: template
-                            value_template: "{{ debug_mode }}"
+                            value_template: "{{ has_value(self_clean_switch) and is_state(self_clean_switch, 'off') }}"
                         then:
-                          - action: persistent_notification.create
-                            data:
-                              title: "🚿 Starting Mop Washing"
-                              message: "Manual self-clean triggered - mop washing will start now..."
+                          - action: button.press
+                            target:
+                              entity_id: "{{ self_clean_button }}"
+
+                          - if:
+                              - condition: template
+                                value_template: "{{ debug_mode }}"
+                            then:
+                              - action: persistent_notification.create
+                                data:
+                                  title: "🚿 Starting Mop Washing"
+                                  message: "Manual self-clean triggered - mop washing will start now..."
 
                   # Skip start if delay=0 (keep robot docked)
                   - if:
