@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.1**
+    **Version: 0.5.2**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -997,6 +997,7 @@ variables:
   selected_map_select: "select.{{ vacuum_base_name }}_selected_map"
   map_camera: "camera.{{ vacuum_base_name }}_map"
   self_clean_switch: "switch.{{ vacuum_base_name }}_self_clean"
+  self_clean_button: "button.{{ vacuum_base_name }}_self_clean"
   charging_status_sensor: "sensor.{{ vacuum_base_name }}_charging_status"
   stop_drying_button: "button.{{ vacuum_base_name }}_manual_drying"
 
@@ -1513,9 +1514,9 @@ actions:
                                   title: "✅ Drying Stopped"
                                   message: "Base station ready for mop washing"
 
-                      - action: switch.turn_on
+                      - action: button.press
                         target:
-                          entity_id: "{{ self_clean_switch }}"
+                          entity_id: "{{ self_clean_button }}"
 
                       - if:
                           - condition: template
@@ -1523,8 +1524,8 @@ actions:
                         then:
                           - action: persistent_notification.create
                             data:
-                              title: "🔧 Self-Clean Enabled"
-                              message: "Preparing robot at station (moistening mops for sweep+mop mode)..."
+                              title: "🚿 Starting Mop Washing"
+                              message: "Manual self-clean triggered - mop washing will start now..."
 
                   # Skip start if delay=0 (keep robot docked)
                   - if:
