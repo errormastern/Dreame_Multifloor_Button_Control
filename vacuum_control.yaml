@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.6**
+    **Version: 0.5.7**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -1104,7 +1104,7 @@ variables:
   # Boolean Evaluations with robust defaults
   is_base_station_map: "{{ current_map_config.has_base_station | default(false) if current_map_config is mapping else (current_map_name == base_station_map) }}"
   is_cleaning: "{{ current_status in cleaning_states }}"
-  is_paused: "{{ current_status in paused_states }}"
+  is_paused: "{{ current_status in paused_states and states(vacuum_entity) != 'docked' }}"
 
   # Per-map cleaning repeats take priority, fall back to global setting
   repeats: "{{ current_map_config.cleaning_repeats | default(global_cleaning_repeats) | default(2) }}"
