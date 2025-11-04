@@ -1,17 +1,17 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.5.7-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
+[![Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/errormastern/dreame-multifloor-control)
 
-⚠️ Under active Development - unstable!
+⚠️ Beta Release - Testing in progress
 
 Control Dreame vacuum cleaners across multiple floors with scheduled cleaning and notification-based transport workflow. Maps with base stations clean automatically; maps without base stations use notifications with action buttons for manual transport.
 
 ## ✨ Features
 
-Auto-detection of vacuum entities (select vacuum, rest detected automatically)<br>
+🤖 Auto-detection of vacuum entities (select vacuum, rest detected automatically)<br>
 📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)<br>
 🔔 Notification workflow with action buttons for transport preparation<br>
 📱 iOS lock screen notifications with configurable interruption levels<br>
@@ -40,154 +40,130 @@ Or manually: **Settings** → **Automations & Scenes** → **Blueprints** → **
 
 1. Create automation from blueprint
 2. Select your vacuum entity (e.g., `vacuum.xiaomi_x10`)
-3. Configure triggers for functions you need (see [Manual Control](#manual-control) below)
+3. Configure triggers for functions you need (see workflows below)
 4. Save and test
 
 Related entities (status, mode, map, camera) are auto-detected from the vacuum entity.
 
-## 🌐 Localization (Optional)
+## 🔄 Workflows
 
-The blueprint supports multilingual notifications for non-English Home Assistant installations. Customize display texts in the **Localization** section:
+This blueprint provides two main workflows for controlling your vacuum across multiple floors.
 
-| Setting | Default (English) | Example (German) |
-|---------|-------------------|------------------|
-| Sweep Mode Display | "Sweep" | "Saugen" |
-| Mop Mode Display | "Mop" | "Wischen" |
-| Combined Mode Display | "Sweep + Mop" | "Saugen + Wischen" |
-| Prepare Button Label | "Prepare Robot" | "Roboter vorbereiten" |
-| Skip Button Label | "Skip Cleaning" | "Reinigung überspringen" |
-| Start Cleaning Button Label | "Start Cleaning" | "Reinigung starten" |
-| Cancel Button Label | "Cancel Cleaning" | "Abbrechen" |
+### 📅 Scheduled Cleaning Workflow
 
-**Where used:**
-- Notification messages (cleaning mode display)
-- Action button labels in scheduled and pickup notifications
-- Template variable `{{ cleaning_mode_display }}` in custom messages
+**Purpose:** Time-based cleaning with automatic preparation and transport notifications.
 
-**Internal logic remains English** - only user-facing texts are localized.
+**Setup:**
+1. Create Schedule helpers in Home Assistant (Settings → Devices & Services → Helpers → Schedule)
+2. Configure Map 1/2/3 schedules in blueprint (assign schedule entities)
+3. Set up notification service for maps without base station
 
-## 📅 Schedule Setup
-
-### 1️⃣ Create Schedule Helpers
-
-Create schedule entities in Home Assistant (Helpers → Schedule). Assign them to maps in the blueprint automation (Map 1/2/3 Configuration sections).
-
-### 2️⃣ Configure Notifications (Optional)
-
-**Required for maps without base station.**
-
-Configure scheduled and pickup notifications with:
-- Notification service (e.g., `notify.mobile_app_iphone`)
-- Title/message with [template variables](#template-variables)
-- Action button names
-- **iOS Settings**: Interruption level (`passive`/`active`/`time-sensitive`/`critical`), sound, critical alerts
-- Repeat settings (1-3 times, 0-240 min interval)
-
-### Template Variables
-
-| Variable | Description |
-|----------|-------------|
-| `{{ robot_name }}` | Robot name |
-| `{{ map_name }}` | Target map name |
-| `{{ current_map }}` | Current map name |
-| `{{ cleaning_mode_display }}` | Sweep Only / Sweep + Mop |
-| `{{ schedule_name }}` | Triggered schedule name |
-| `{{ current_time }}` | Current time (HH:MM) |
-| `{{ wait_minutes }}` | Wait minutes (repeats) |
-| `{{ repeat_number }}` | Repeat count |
-| `{{ base_station_map }}` | Base station map name |
-
-### Workflow
+**Behavior depends on map type:**
 
 **Maps WITH base station:**
-- Schedule triggers → Robot starts cleaning automatically
-- No notifications sent
+- Schedule triggers → Robot starts cleaning immediately
+- No manual intervention needed
 
 **Maps WITHOUT base station:**
-1. Schedule triggers → Scheduled notification with action buttons
-2. Press "Prepare Robot" → Robot starts, moistens mop, pauses automatically
-3. Pickup notification → Pick up robot and transport to target floor
-4. Press "Start Cleaning" → Robot resumes cleaning
+1. Schedule triggers → Notification with "Prepare Robot" and "Skip" buttons
+2. Press "Prepare Robot" → Robot washes mop (if sweep+mop), starts cleaning, pauses automatically
+3. Pickup notification → Transport robot to target floor
+4. Press "Start Cleaning" button → Robot resumes cleaning
 
 **Conflict Detection:**
 - Only one schedule runs at a time
-- If robot is already cleaning, new schedules abort silently
+- New schedules abort silently if robot is already cleaning
 
-## 🎛️ Manual Control
+### 🎛️ Manual Control Workflow
 
-Each function can use any Home Assistant trigger. For **MQTT/Device triggers** (e.g., Zigbee2MQTT buttons), action values are auto-detected. For **State/Event triggers**, set the Trigger ID manually in advanced trigger options.
+**Purpose:** Direct control via buttons, switches, or other triggers.
 
-| Function | Trigger ID | Description |
-|----------|------------|-------------|
-| Sweep Only Mode | `fn_sweep` | Set cleaning mode to sweep-only |
-| Sweep + Mop Mode | `fn_mop` | Set cleaning mode to sweep and mop |
-| Start/Pause/Resume | `fn_start` | Context-aware workflow based on robot status |
-| Map 1 / Map 2 / Map 3 | `fn_map1` / `fn_map2` / `fn_map3` | Switch to selected map |
+**Available Functions:**
 
-### Trigger Examples
+| Function | Description | Use Case |
+|----------|-------------|----------|
+| **Sweep Only Mode** | Set cleaning mode to sweep-only | Quick cleaning without mopping |
+| **Sweep + Mop Mode** | Set cleaning mode with mop | Full cleaning with water |
+| **Smart Start/Pause/Resume** | Context-aware control | Main cleaning button |
+| **Map 1 / Map 2 / Map 3** | Switch between floor maps | Multi-floor control |
 
-MQTT/Device triggers auto-detect action values. For State/Event triggers, set Trigger ID manually (e.g., `fn_start`).
+**Smart Start/Pause/Resume Logic:**
 
-**Note:** Use Schedule Helpers for time-based automation, not manual triggers.
-
-## Start/Pause/Resume Workflow
-
-The function adapts to robot status and location:
+The function automatically adapts to robot status:
 
 | Robot Status | Current Map | Action |
 |--------------|-------------|--------|
 | **Cleaning** | Any | Pause immediately |
 | **Paused** | Any | Resume cleaning |
-| **Idle** | Base station map | Start cleaning (self-clean enabled) |
-| **Idle** | Other map | Run preparation workflow → pause for transport |
+| **Idle (docked)** | Base station map | Start cleaning on current map |
+| **Idle (docked)** | Other map | Run preparation workflow → pause for transport |
 
-### Preparation Workflow (Non-Base Station Maps)
+**Preparation Workflow (Non-Base Station Maps):**
 
-For sweep+mop mode:
+For sweep+mop mode on maps without base station:
 
-1. Enable self-clean → Triggers preparation program (moistening, tank filling)
-2. Start cleaning → Wait for undocking
-3. Optional delay (default 2s, ~10cm from station)
-4. Pause robot
-5. Disable self-clean → Prevents return to base during cleaning
+1. Robot washes mop at base station (~3-4 minutes)
+2. Robot starts cleaning and undocks
+3. After short delay (~4.5s), robot pauses automatically
+4. User transports robot to target floor
+5. Press button again to resume cleaning
 
-> Self-clean must be disabled after pause to prevent robot returning to base while cleaning on target floor.
+> **Why the delay?** Allows robot to move away from charging contacts for easier pickup.
 
-## ⚙️ Advanced Settings
+**Trigger Setup:**
 
-### Pause Delay After Undocking
-Default: 2.0s (Range: 0.0-5.0s). Time to wait after leaving station before pausing. Allows robot to move away from contacts for easier pickup.
+Use any Home Assistant trigger type:
+- **MQTT triggers**: Action values auto-detected from payload
+- **Device triggers**: Action values auto-detected
+- **State/Event triggers**: Set Trigger ID manually (e.g., `fn_start`)
 
-### Timeouts
-Adjust if robot needs more time:
-- **Start**: 120s (30-300s)
-- **Moistening**: 60s (10-180s)
-- **Undocking**: 30s (10-60s)
+## 🌐 Localization
 
-### Segment Cleaning
-**Enabled** (default): Uses `dreame_vacuum.vacuum_clean_segment` with configurable repeats.
-**Disabled**: Falls back to `vacuum.start` (full map).
+The blueprint supports multilingual notifications. Customize display texts in the Localization section:
+- Sweep/Mop mode labels
+- Button labels (Prepare, Skip, Start, Cancel)
+- Used in notifications and action buttons
 
-### Debug Mode
-Shows persistent notifications with timing measurements and execution details. Helpful for optimizing timeouts.
+Internal logic remains English - only user-facing texts are localized.
 
 ## 🔧 Troubleshooting
 
-**Automation not triggering:** Verify triggers configured, enable debug mode.
+**Automation not triggering:**
+- Verify at least one function is configured with triggers
+- Enable debug mode to see execution flow
 
-**Robot not starting/pausing:** Check entity auto-detection and cleaning mode values in debug mode.
+**Robot not starting/pausing:**
+- Check entity auto-detection (status, mode, map sensors)
+- Verify cleaning mode values match your robot
+- Enable debug mode for timing information
 
-**Segments not working:** Verify `camera.{robot}_map` has `segments` attribute, or disable segment service.
+**Mop washing takes too long:**
+- Increase "Moistening Timeout" (default: 215s)
+- Check debug notifications for actual washing duration
 
-**iOS notifications not on lock screen:** Set interruption level to `active` or higher. Critical alerts require iOS permission.
+**Robot returns to base during cleaning:**
+- Verify self-clean switch is disabled after preparation
+- Check blueprint version ≥ 0.5.0
 
-**Android notifications:** Verify notification service and channel settings.
+**Segment cleaning not working:**
+- Verify `camera.{robot}_map` has `segments` attribute
+- Or disable "Use Segment Service" in blueprint settings
+
+**iOS notifications not on lock screen:**
+- Set interruption level to `active` or higher
+- Critical alerts require iOS permission
+
+## 📚 Configuration Details
+
+Detailed configuration documentation (all blueprint sections, settings, and examples) will be provided in a separate configuration guide.
 
 ## Technical Notes
 
 **Automation Mode:** `queued` (max: 10) - Required for button devices sending press + release events.
 
-**Status:** Alpha (v0.3.6) - Tested with Xiaomi X10+. Feedback via [GitHub Issues](https://github.com/errormastern/dreame-multifloor-control/issues).
+**Tested with:** Dreame X10+ / Xiaomi X10+ (Dreame L10s Ultra models also reported working)
+
+**Feedback:** Report issues or request features via [GitHub Issues](https://github.com/errormastern/dreame-multifloor-control/issues)
 
 ## Links
 

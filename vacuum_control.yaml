@@ -1,7 +1,7 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.5.7**
+    **Version: 0.6.0**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
@@ -709,10 +709,11 @@ blueprint:
         moistening_timeout:
           name: "⏱️ Moistening Timeout"
           description: |
-            Wait time for self-wash base workflow (mop moistening + water refill).
-            Can take 3+ minutes for complete preparation cycle.
+            Wait time for mop washing cycle at base station (typically 3-4 minutes).
+            Blueprint waits for washing completion or timeout before starting cleaning.
 
-            Automation continues on timeout (non-critical).
+            Based on testing: ~186s actual washing time, 215s recommended for safe detection.
+            Increase if washing takes longer on your model.
           selector:
             number:
               min: 10
@@ -720,31 +721,31 @@ blueprint:
               step: 5
               unit_of_measurement: "s"
               mode: slider
-          default: 180
+          default: 215
 
         sweep_start_timeout:
           name: "⏱️ Sweep Start Timeout"
           description: |
-            Wait time for sweep-only cleaning to start (5-30 seconds).
-            Robot leaves station immediately when sweeping only.
+            Wait time for sweep-only cleaning to start (typically 5-15 seconds).
+            Robot undocks immediately without washing cycle when sweeping only.
 
-            Fallback timeout if sensor detection fails.
+            Adjust if your robot needs more time to register cleaning start.
           selector:
             number:
               min: 5
-              max: 30
-              step: 1
+              max: 60
+              step: 5
               unit_of_measurement: "s"
               mode: slider
-          default: 10
+          default: 30
 
         mop_start_timeout:
           name: "⏱️ Mop Start Timeout"
           description: |
-            Wait time for sweep+mop cleaning to start (60-180 seconds).
-            Includes self-wash base preparation (mop moistening).
+            Wait time for robot to start cleaning after mop washing completes (typically 60-120s).
+            Robot undocks and begins cleaning after washing cycle.
 
-            Fallback timeout if sensor detection fails.
+            Adjust if your robot needs more time between washing and undocking.
           selector:
             number:
               min: 60
