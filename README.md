@@ -1,6 +1,6 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.4.5-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.5.7-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-red.svg)](https://github.com/errormastern/dreame-multifloor-control)
@@ -11,16 +11,16 @@ Control Dreame vacuum cleaners across multiple floors with scheduled cleaning an
 
 ## ✨ Features
 
-- Auto-detection of vacuum entities (select vacuum, rest detected automatically)
-- 📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)
-- 🔔 Notification workflow with action buttons for transport preparation
-- 📱 iOS lock screen notifications with configurable interruption levels
-- 🎛️ Manual control via MQTT, device triggers, state changes, or events
-- 🏠 Segment-based cleaning with configurable repeats per map
-- ⚠️ Conflict detection (only one schedule runs at a time)
-- 🌐 Localization support for multilingual notifications
-- ⚠️ Emergency map validation (pauses if cleaning starts on wrong map)
-- 🐛 Debug mode with timing measurements and execution tracking
+Auto-detection of vacuum entities (select vacuum, rest detected automatically)<br>
+📅 Per-map schedules with sweep/mop modes (3 maps, 6 schedules total)<br>
+🔔 Notification workflow with action buttons for transport preparation<br>
+📱 iOS lock screen notifications with configurable interruption levels<br>
+🎛️ Manual control via MQTT, device triggers, state changes, or events<br>
+🏠 Segment-based cleaning with configurable repeats per map<br>
+⚠️ Conflict detection (only one schedule runs at a time)<br>
+🌐 Localization support for multilingual notifications<br>
+⚠️ Emergency map validation (pauses if cleaning starts on wrong map)<br>
+🐛 Debug mode with timing measurements and execution tracking
 
 ## 📋 Requirements
 
