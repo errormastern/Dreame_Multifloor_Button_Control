@@ -1,11 +1,12 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.7.0**
+    **Version: 0.7.1**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
 
+    **v0.7.1 Changes:** Fixed customized_cleaning handling - mode changes now automatically disable customized cleaning when active
     **v0.7.0 Changes:** Extended Advanced Settings - error detection, idle states, base warnings, standby handling
 
     **Main Features:**
@@ -1436,6 +1437,16 @@ actions:
           - condition: template
             value_template: "{{ triggered_function == 'fn_sweep' }}"
         sequence:
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -1458,6 +1469,16 @@ actions:
           - condition: template
             value_template: "{{ triggered_function == 'fn_mop' }}"
         sequence:
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -1891,6 +1912,16 @@ actions:
               - stop: "Schedule conflict"
 
           # Set mode and switch map
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -1995,6 +2026,16 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2097,6 +2138,16 @@ actions:
                       title: "⚠️ Schedule Conflict"
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
+
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
 
           - action: select.select_option
             target:
@@ -2201,6 +2252,16 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2303,6 +2364,16 @@ actions:
                       title: "⚠️ Schedule Conflict"
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
+
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
 
           - action: select.select_option
             target:
@@ -2410,6 +2481,16 @@ actions:
           - if: "{{ target_map_config.has_base_station }}"
             then:
               # Base station map → Start cleaning immediately
+              # Disable customized_cleaning if active (enables global cleaning_mode)
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                then:
+                  - action: switch.turn_off
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                    timeout: 10
+                    continue_on_timeout: false
+
               - action: select.select_option
                 target:
                   entity_id: "{{ cleaning_mode_select }}"
