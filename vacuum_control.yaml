@@ -1,11 +1,12 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.7.1**
+    **Version: 0.7.2**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
 
+    **v0.7.2 Changes:** Added dock validation - schedules and prepare actions verify robot is docked before starting
     **v0.7.1 Changes:** Fixed customized_cleaning handling - mode changes now automatically disable customized cleaning when active
     **v0.7.0 Changes:** Extended Advanced Settings - error detection, idle states, base warnings, standby handling
 
@@ -1156,6 +1157,7 @@ variables:
   is_base_station_map: "{{ current_map_config.has_base_station | default(false) if current_map_config is mapping else (current_map_name == base_station_map) }}"
   is_cleaning: "{{ current_status in cleaning_states }}"
   is_paused: "{{ current_status in paused_states and states(vacuum_entity) != 'docked' }}"
+  is_docked: "{{ states(vacuum_entity) == 'docked' }}"
   is_error: "{{ current_status in error_states }}"
   is_idle: "{{ current_status in idle_states }}"
   current_base_status: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') }}"
@@ -1911,6 +1913,24 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
+
           # Set mode and switch map
           # Disable customized_cleaning if active (enables global cleaning_mode)
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2026,6 +2046,24 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
+
           # Disable customized_cleaning if active (enables global cleaning_mode)
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
@@ -2138,6 +2176,24 @@ actions:
                       title: "⚠️ Schedule Conflict"
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
 
           # Disable customized_cleaning if active (enables global cleaning_mode)
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2252,6 +2308,24 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
+
           # Disable customized_cleaning if active (enables global cleaning_mode)
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
@@ -2365,6 +2439,24 @@ actions:
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
+
           # Disable customized_cleaning if active (enables global cleaning_mode)
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
@@ -2477,6 +2569,24 @@ actions:
                       title: "⚠️ Schedule Conflict"
                       message: "{{ schedule_label }} skipped - robot already cleaning"
               - stop: "Schedule conflict"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Schedule Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Schedule:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Please ensure robot is docked at base station before scheduled cleaning.
+                    Schedule will retry at next trigger time.
+                  notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start scheduled cleaning"
 
           - if: "{{ target_map_config.has_base_station }}"
             then:
@@ -2597,6 +2707,24 @@ actions:
               notification_target_map_name: "{{ map_1_name }}"
               notification_cleaning_repeats: "{{ map_config.map_1.cleaning_repeats }}"
               schedule_label: "Map 1 Sweep"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
 
           # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
@@ -2787,6 +2915,24 @@ actions:
               notification_target_map_name: "{{ map_1_name }}"
               notification_cleaning_repeats: "{{ map_config.map_1.cleaning_repeats }}"
               schedule_label: "Map 1 Mop"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
 
           - if: "{{ debug_mode }}"
             then:
@@ -2985,6 +3131,24 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_2.cleaning_repeats }}"
               schedule_label: "Map 2 Sweep"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
+
           # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
@@ -3174,6 +3338,24 @@ actions:
               notification_target_map_name: "{{ map_2_name }}"
               notification_cleaning_repeats: "{{ map_config.map_2.cleaning_repeats }}"
               schedule_label: "Map 2 Mop"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
 
           # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
@@ -3375,6 +3557,24 @@ actions:
               notification_cleaning_repeats: "{{ map_config.map_3.cleaning_repeats }}"
               schedule_label: "Map 3 Sweep"
 
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
+
           # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
             then:
@@ -3564,6 +3764,24 @@ actions:
               notification_target_map_name: "{{ map_3_name }}"
               notification_cleaning_repeats: "{{ map_config.map_3.cleaning_repeats }}"
               schedule_label: "Map 3 Mop"
+
+          # Dock check: Abort if robot not docked
+          - if: "{{ not is_docked }}"
+            then:
+              - action: persistent_notification.create
+                data:
+                  title: "⚠️ Preparation Failed: {{ schedule_label }}"
+                  message: |
+                    **Robot is not docked!**
+
+                    **Preparation:** {{ schedule_label }}
+                    **Robot State:** {{ states(vacuum_entity) }}
+                    **Current Map:** {{ current_map_name }}
+
+                    Robot must be docked at base station for preparation workflow.
+                    Please dock robot and try again via notification button.
+                  notification_id: "prepare_dock_error_{{ vacuum_base_name }}"
+              - stop: "Robot not docked, cannot start preparation"
 
           # Professional debug notification: Workflow started
           - if: "{{ debug_mode }}"
