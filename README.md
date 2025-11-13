@@ -1,6 +1,6 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.7.2-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/errormastern/dreame-multifloor-control)
@@ -17,9 +17,8 @@ Control Dreame vacuum cleaners across multiple floors with scheduled cleaning an
 📱 iOS lock screen notifications with configurable interruption levels<br>
 🎛️ Manual control via MQTT, device triggers, state changes, or events<br>
 🏠 Segment-based cleaning with configurable repeats per map<br>
-⚠️ Conflict detection (only one schedule runs at a time)<br>
+⚠️ Safety checks: Schedule conflict detection, dock status validation, emergency map validation<br>
 🌐 Localization support for multilingual notifications<br>
-⚠️ Emergency map validation (pauses if cleaning starts on wrong map)<br>
 🐛 Debug mode with timing measurements and execution tracking
 
 ## 📋 Requirements
@@ -126,33 +125,6 @@ The blueprint supports multilingual notifications. Customize display texts in th
 
 Internal logic remains English - only user-facing texts are localized.
 
-## 🔧 Troubleshooting
-
-**Automation not triggering:**
-- Verify at least one function is configured with triggers
-- Enable debug mode to see execution flow
-
-**Robot not starting/pausing:**
-- Check entity auto-detection (status, mode, map sensors)
-- Verify cleaning mode values match your robot
-- Enable debug mode for timing information
-
-**Mop washing takes too long:**
-- Increase "Moistening Timeout" (default: 215s)
-- Check debug notifications for actual washing duration
-
-**Robot returns to base during cleaning:**
-- Verify self-clean switch is disabled after preparation
-- Check blueprint version ≥ 0.5.0
-
-**Segment cleaning not working:**
-- Verify `camera.{robot}_map` has `segments` attribute
-- Or disable "Use Segment Service" in blueprint settings
-
-**iOS notifications not on lock screen:**
-- Set interruption level to `active` or higher
-- Critical alerts require iOS permission
-
 ## 📚 Configuration Details
 
 Detailed configuration documentation (all blueprint sections, settings, and examples) will be provided in a separate configuration guide.
@@ -161,7 +133,7 @@ Detailed configuration documentation (all blueprint sections, settings, and exam
 
 **Automation Mode:** `queued` (max: 10) - Required for button devices sending press + release events.
 
-**Tested with:** Dreame X10+ / Xiaomi X10+ (Dreame L10s Ultra models also reported working)
+**Tested with:** Xiaomi X10+ (Dreame L10s Ultra models should also work, as well as from Dreame Integration supported models)
 
 **Feedback:** Report issues or request features via [GitHub Issues](https://github.com/errormastern/dreame-multifloor-control/issues)
 
