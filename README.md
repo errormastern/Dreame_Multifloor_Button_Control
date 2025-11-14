@@ -1,6 +1,6 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.7.2-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.8.0%20beta-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/errormastern/dreame-multifloor-control)
@@ -17,6 +17,7 @@ Control Dreame vacuum cleaners across multiple floors with scheduled cleaning an
 📱 iOS lock screen notifications with configurable interruption levels<br>
 🎛️ Manual control via MQTT, device triggers, state changes, or events<br>
 🏠 Segment-based cleaning with configurable repeats per map<br>
+✨ **NEW:** Optional customized cleaning - uses room settings from Dreame app (cleaning order, per-room suction/water/repeats)<br>
 ⚠️ Safety checks: Schedule conflict detection, dock status validation, emergency map validation<br>
 🌐 Localization support for multilingual notifications<br>
 🐛 Debug mode with timing measurements and execution tracking

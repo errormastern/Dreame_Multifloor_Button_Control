@@ -1,11 +1,13 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.7.2**
+    **Version: 0.8.0 beta**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
+    Optional: Uses room-specific settings from Dreame app (cleaning order, suction, water, repeats per room).
 
+    **v0.8.0 Changes:** Added customized cleaning support - uses room settings from Dreame app when available (cleaning sequence, per-room suction/water/repeats)
     **v0.7.2 Changes:** Added dock validation - schedules and prepare actions verify robot is docked before starting
     **v0.7.1 Changes:** Fixed customized_cleaning handling - mode changes now automatically disable customized cleaning when active
     **v0.7.0 Changes:** Extended Advanced Settings - error detection, idle states, base warnings, standby handling
@@ -630,8 +632,36 @@ blueprint:
             Enable room/segment-based cleaning with configurable repeats.
             Uses `dreame_vacuum.vacuum_clean_segment` service.
 
+            **Integration with Customized Cleaning:**
+            When customized_cleaning or cleaning_sequence is enabled, segment service call parameters (repeats, suction, water) are ignored by robot. Robot uses settings from Dreame app instead.
+
             Disable if segments aren't detected or robot doesn't support segment cleaning.
             Falls back to `vacuum.start` when disabled.
+          selector:
+            boolean:
+          default: true
+
+        use_cleaning_sequence:
+          name: "Use Cleaning Sequence"
+          description: |
+            Enable room cleaning sequence from Dreame app settings (uses `order` attribute from map).
+            Optional: Cleans rooms in user-defined order from Dreame app.
+
+            **Fallback:** If disabled or no sequence defined, cleans all rooms without specific order.
+            **Requires:** Firmware ≥1156, `switch.{robot}_cleaning_sequence` available.
+          selector:
+            boolean:
+          default: true
+
+        use_customized_cleaning:
+          name: "Use Customized Cleaning (Mop Modes Only)"
+          description: |
+            Enable room-specific cleaning settings from Dreame app (suction level, water volume, mop humidity, repeats per room).
+            Optional: Uses per-room settings defined in Dreame app.
+
+            **IMPORTANT:** Only used for Sweep+Mop programs. Sweep-only programs use sequence but NOT customized settings.
+            **Fallback:** If disabled or no room settings defined, uses global mode and blueprint repeat settings.
+            **Requires:** Firmware ≥1156, `switch.{robot}_customized_cleaning` available.
           selector:
             boolean:
           default: true
@@ -1120,6 +1150,20 @@ variables:
       has_base_station: "{{ map_3_name == base_station_map }}"
 
   # ========================================
+  # CUSTOMIZED CLEANING FEATURE DETECTION
+  # ========================================
+  use_cleaning_sequence_input: !input use_cleaning_sequence
+  use_customized_cleaning_input: !input use_customized_cleaning
+
+  # Check if switches are available
+  cleaning_sequence_available: "{{ states('switch.' ~ vacuum_base_name ~ '_cleaning_sequence') not in ['unknown', 'unavailable'] }}"
+  customized_cleaning_available: "{{ states('switch.' ~ vacuum_base_name ~ '_customized_cleaning') not in ['unknown', 'unavailable'] }}"
+
+  # Determine if features should be used
+  should_use_cleaning_sequence: "{{ use_cleaning_sequence_input and cleaning_sequence_available }}"
+  should_use_customized_cleaning: "{{ use_customized_cleaning_input and customized_cleaning_available }}"
+
+  # ========================================
   # CLEANING SETTINGS (Must be defined BEFORE is_cleaning/is_paused)
   # ========================================
   mode_sweeping: !input sweeping_mode_value
@@ -1158,6 +1202,8 @@ variables:
   is_cleaning: "{{ current_status in cleaning_states }}"
   is_paused: "{{ current_status in paused_states and states(vacuum_entity) != 'docked' }}"
   is_docked: "{{ states(vacuum_entity) == 'docked' }}"
+  has_cleaning_sequence: "{{ should_use_cleaning_sequence }}"
+  has_customized_cleaning: "{{ should_use_customized_cleaning }}"
   is_error: "{{ current_status in error_states }}"
   is_idle: "{{ current_status in idle_states }}"
   current_base_status: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') }}"
@@ -1567,6 +1613,29 @@ actions:
                                   title: "🔧 Self-Clean Enabled"
                                   message: "⏱ {{ now().strftime('%H:%M:%S') }}\nRobot can return to station during cleaning"
 
+                      # Enable customized cleaning features (base station map)
+                      - if: "{{ has_customized_cleaning and current_mode == mode_sweeping_mopping }}"
+                        then:
+                          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                            then:
+                              - action: switch.turn_on
+                                target:
+                                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                                timeout: 5
+                                continue_on_timeout: false
+
+                      - if: "{{ has_cleaning_sequence }}"
+                        then:
+                          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                            then:
+                              - action: switch.turn_on
+                                target:
+                                  entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                                timeout: 5
+                                continue_on_timeout: false
+
                       - if:
                           - condition: template
                             value_template: "{{ use_segment_service and has_segments }}"
@@ -1722,6 +1791,29 @@ actions:
                             data:
                               title: "⏱️ Timing: Washing Complete"
                               message: "⏱ {{ now().strftime('%H:%M:%S') }}\nDuration: {{ duration_washing }}s / {{ moistening_timeout }}s{{ ' (TIMEOUT)' if not wait.completed else '' }}"
+
+                  # Enable customized cleaning features (other map - after washing, before start)
+                  - if: "{{ has_customized_cleaning and current_mode == mode_sweeping_mopping }}"
+                    then:
+                      - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                        then:
+                          - action: switch.turn_on
+                            target:
+                              entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                            timeout: 5
+                            continue_on_timeout: false
+
+                  - if: "{{ has_cleaning_sequence }}"
+                    then:
+                      - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                        then:
+                          - action: switch.turn_on
+                            target:
+                              entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                          - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                            timeout: 5
+                            continue_on_timeout: false
 
                   # Start cleaning (both sweep-only and sweep+mop)
                   - if:
@@ -1942,6 +2034,18 @@ actions:
                 timeout: 10
                 continue_on_timeout: false
 
+          # Enable cleaning_sequence (if available)
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2064,16 +2168,7 @@ actions:
                   notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
-          # Disable customized_cleaning if active (enables global cleaning_mode)
-          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
-              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
-                timeout: 10
-                continue_on_timeout: false
-
+          # Set mode and switch map
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2089,6 +2184,29 @@ actions:
           - wait_template: "{{ states(selected_map_select) == target_map_name }}"
             timeout: 30
             continue_on_timeout: false
+
+          # Enable customized cleaning + sequence (Mop Mode)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           - if: "{{ target_map_config.has_base_station }}"
             then:
@@ -2195,16 +2313,7 @@ actions:
                   notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
-          # Disable customized_cleaning if active (enables global cleaning_mode)
-          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
-              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
-                timeout: 10
-                continue_on_timeout: false
-
+          # Set mode and switch map
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2220,6 +2329,29 @@ actions:
           - wait_template: "{{ states(selected_map_select) == target_map_name }}"
             timeout: 30
             continue_on_timeout: false
+
+          # Enable customized cleaning + sequence (Mop Mode)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           - if: "{{ target_map_config.has_base_station }}"
             then:
@@ -2326,16 +2458,7 @@ actions:
                   notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
-          # Disable customized_cleaning if active (enables global cleaning_mode)
-          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
-              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
-                timeout: 10
-                continue_on_timeout: false
-
+          # Set mode and switch map
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2351,6 +2474,29 @@ actions:
           - wait_template: "{{ states(selected_map_select) == target_map_name }}"
             timeout: 30
             continue_on_timeout: false
+
+          # Enable customized cleaning + sequence (Mop Mode)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           - if: "{{ target_map_config.has_base_station }}"
             then:
@@ -2457,16 +2603,7 @@ actions:
                   notification_id: "schedule_dock_error_{{ vacuum_base_name }}"
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
-          # Disable customized_cleaning if active (enables global cleaning_mode)
-          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
-            then:
-              - action: switch.turn_off
-                target:
-                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
-              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
-                timeout: 10
-                continue_on_timeout: false
-
+          # Set mode and switch map
           - action: select.select_option
             target:
               entity_id: "{{ cleaning_mode_select }}"
@@ -2482,6 +2619,29 @@ actions:
           - wait_template: "{{ states(selected_map_select) == target_map_name }}"
             timeout: 30
             continue_on_timeout: false
+
+          # Enable customized cleaning + sequence (Mop Mode)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           - if: "{{ target_map_config.has_base_station }}"
             then:
@@ -2591,16 +2751,7 @@ actions:
           - if: "{{ target_map_config.has_base_station }}"
             then:
               # Base station map → Start cleaning immediately
-              # Disable customized_cleaning if active (enables global cleaning_mode)
-              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
-                then:
-                  - action: switch.turn_off
-                    target:
-                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
-                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
-                    timeout: 10
-                    continue_on_timeout: false
-
+              # Set mode and switch map
               - action: select.select_option
                 target:
                   entity_id: "{{ cleaning_mode_select }}"
@@ -2616,6 +2767,29 @@ actions:
               - wait_template: "{{ states(selected_map_select) == target_map_name }}"
                 timeout: 30
                 continue_on_timeout: false
+
+              # Enable customized cleaning + sequence (Mop Mode)
+              - if: "{{ has_customized_cleaning }}"
+                then:
+                  - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                    then:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                      - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                        timeout: 5
+                        continue_on_timeout: false
+
+              - if: "{{ has_cleaning_sequence }}"
+                then:
+                  - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                    then:
+                      - action: switch.turn_on
+                        target:
+                          entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                      - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                        timeout: 5
+                        continue_on_timeout: false
 
               - if: "{{ use_segment_service and has_segments }}"
                 then:
@@ -2756,6 +2930,18 @@ actions:
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
             timeout: 10
             continue_on_timeout: false
+
+          # Step 1b: Enable cleaning_sequence (if available)
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
           - variables:
@@ -2990,6 +3176,29 @@ actions:
             timeout: 180
             continue_on_timeout: false
 
+          # Step 4b: Enable customized cleaning + sequence (after washing, before start)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
           # Step 5: Extract segments & start cleaning
           - variables:
               notification_map_segments: >-
@@ -3179,6 +3388,18 @@ actions:
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
             timeout: 10
             continue_on_timeout: false
+
+          # Step 1b: Enable cleaning_sequence (if available)
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
           - variables:
@@ -3414,6 +3635,29 @@ actions:
             timeout: 180
             continue_on_timeout: false
 
+          # Step 4b: Enable customized cleaning + sequence (after washing, before start)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
           # Step 5: Extract segments & start cleaning
           - variables:
               notification_map_segments: >-
@@ -3605,6 +3849,18 @@ actions:
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
             timeout: 10
             continue_on_timeout: false
+
+          # Step 1b: Enable cleaning_sequence (if available)
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           # Step 2: Save & disable self_clean (for consistency, even though sweep mode doesn't use mops)
           - variables:
@@ -3839,6 +4095,29 @@ actions:
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') not in ['washing', 'clean_add_water'] }}"
             timeout: 180
             continue_on_timeout: false
+
+          # Step 4b: Enable customized cleaning + sequence (after washing, before start)
+          - if: "{{ has_customized_cleaning }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
+
+          - if: "{{ has_cleaning_sequence }}"
+            then:
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
+                then:
+                  - action: switch.turn_on
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
+                    timeout: 5
+                    continue_on_timeout: false
 
           # Step 5: Extract segments & start cleaning
           - variables:
