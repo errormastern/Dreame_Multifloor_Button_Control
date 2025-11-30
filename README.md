@@ -1,11 +1,9 @@
 # 🤖 Dreame Vacuum - Multi-Floor Control
 
-[![Version](https://img.shields.io/badge/version-0.8.0%20beta-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
+[![Version](https://img.shields.io/badge/version-0.8.1-blue.svg)](https://github.com/errormastern/dreame-multifloor-control/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.10%2B-green.svg)](https://www.home-assistant.io/)
 [![License](https://img.shields.io/badge/license-MIT-orange.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-beta-yellow.svg)](https://github.com/errormastern/dreame-multifloor-control)
-
-⚠️ Beta Release - Testing in progress
+[![Status](https://img.shields.io/badge/status-stable-green.svg)](https://github.com/errormastern/dreame-multifloor-control)
 
 Control Dreame vacuum cleaners across multiple floors with scheduled cleaning and notification-based transport workflow. Maps with base stations clean automatically; maps without base stations use notifications with action buttons for manual transport.
 

@@ -1,16 +1,16 @@
 blueprint:
   name: "🤖 Dreame Vacuum Multi-Button Control"
   description: |
-    **Version: 0.8.0 beta**
+    **Version: 0.8.1**
 
     Multi-floor control for Dreame vacuum cleaners with simplified, reliable start/pause workflow.
     Intelligent washing detection and configurable delay for easy robot pickup.
     Optional: Uses room-specific settings from Dreame app (cleaning order, suction, water, repeats per room).
 
+    **v0.8.1 Changes:** Improved robustness - entity availability checks and error handling prevent automation aborts when entities are unavailable
     **v0.8.0 Changes:** Added customized cleaning support - uses room settings from Dreame app when available (cleaning sequence, per-room suction/water/repeats)
     **v0.7.2 Changes:** Added dock validation - schedules and prepare actions verify robot is docked before starting
     **v0.7.1 Changes:** Fixed customized_cleaning handling - mode changes now automatically disable customized cleaning when active
-    **v0.7.0 Changes:** Extended Advanced Settings - error detection, idle states, base warnings, standby handling
 
     **Main Features:**
     🤖 Auto-detection of vacuum entities (select vacuum, rest auto-detected)
@@ -1337,11 +1337,21 @@ variables:
   # Priority 1: rooms (extract room_id values)
   # Priority 2: segments (extract segment_id or keys)
   # Room/Segment Data Processing (simplified with filters)
-  # Extract room_id from rooms dict (preferred)
-  room_ids: "{{ state_attr(map_camera, 'rooms').values() | map(attribute='room_id') | list if state_attr(map_camera, 'rooms') else [] }}"
+  # Extract room_id from rooms dict (preferred) - with entity availability check
+  room_ids: >
+    {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_camera, 'rooms').values() | map(attribute='room_id') | list if state_attr(map_camera, 'rooms') else [] }}
+    {% else %}
+      []
+    {% endif %}
 
-  # Extract segment_id from segments dict (fallback: use keys if segment_id unavailable)
-  segment_ids: "{{ state_attr(map_camera, 'segments').values() | map(attribute='segment_id') | list if state_attr(map_camera, 'segments') and state_attr(map_camera, 'segments').values() | map(attribute='segment_id') | list | length > 0 else (state_attr(map_camera, 'segments').keys() | map('int') | list if state_attr(map_camera, 'segments') else []) }}"
+  # Extract segment_id from segments dict (fallback: use keys if segment_id unavailable) - with entity availability check
+  segment_ids: >
+    {% if states(map_camera) not in ['unknown', 'unavailable'] %}
+      {{ state_attr(map_camera, 'segments').values() | map(attribute='segment_id') | list if state_attr(map_camera, 'segments') and state_attr(map_camera, 'segments').values() | map(attribute='segment_id') | list | length > 0 else (state_attr(map_camera, 'segments').keys() | map('int') | list if state_attr(map_camera, 'segments') else []) }}
+    {% else %}
+      []
+    {% endif %}
 
   # Prioritize rooms, fallback to segments, empty if neither available
   map_segments: "{{ room_ids if room_ids | length > 0 else segment_ids }}"
@@ -1489,6 +1499,7 @@ actions:
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
               - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
                 target:
                   entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
               - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -1496,6 +1507,7 @@ actions:
                 continue_on_timeout: false
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -1521,6 +1533,7 @@ actions:
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
               - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
                 target:
                   entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
               - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -1528,6 +1541,7 @@ actions:
                 continue_on_timeout: false
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -1556,6 +1570,7 @@ actions:
                     value_template: "{{ is_cleaning }}"
                 sequence:
                   - action: vacuum.pause
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -1574,6 +1589,7 @@ actions:
                     value_template: "{{ is_paused }}"
                 sequence:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -1641,6 +1657,7 @@ actions:
                             value_template: "{{ use_segment_service and has_segments }}"
                         then:
                           - action: dreame_vacuum.vacuum_clean_segment
+                            continue_on_error: true  # Don't abort if vacuum unavailable
                             target:
                               entity_id: "{{ vacuum_entity }}"
                             data:
@@ -1697,6 +1714,7 @@ actions:
                                   message: "⏱ {{ now().strftime('%H:%M:%S') }}\nAborting 2h drying process..."
 
                           - action: button.press
+                            continue_on_error: true  # Don't abort if button unavailable
                             target:
                               entity_id: "{{ stop_drying_button }}"
 
@@ -1715,6 +1733,7 @@ actions:
 
                       # Start manual mop washing (always trigger in sweep+mop mode)
                       - action: button.press
+                        continue_on_error: true  # Don't abort if button unavailable
                         target:
                           entity_id: "{{ self_clean_button }}"
 
@@ -1830,6 +1849,7 @@ actions:
                         value_template: "{{ use_segment_service and has_segments }}"
                     then:
                       - action: dreame_vacuum.vacuum_clean_segment
+                        continue_on_error: true  # Don't abort if vacuum unavailable
                         target:
                           entity_id: "{{ vacuum_entity }}"
                         data:
@@ -1837,6 +1857,7 @@ actions:
                           repeats: "{{ repeats }}"
                     else:
                       - action: vacuum.start
+                        continue_on_error: true  # Don't abort if vacuum unavailable
                         target:
                           entity_id: "{{ vacuum_entity }}"
 
@@ -1862,6 +1883,7 @@ actions:
 
                   # Pause for manual transport
                   - action: vacuum.pause
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -1914,6 +1936,7 @@ actions:
             value_template: "{{ triggered_function == 'fn_map1' }}"
         sequence:
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -1936,6 +1959,7 @@ actions:
             value_template: "{{ triggered_function == 'fn_map2' }}"
         sequence:
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -1958,6 +1982,7 @@ actions:
             value_template: "{{ triggered_function == 'fn_map3' }}"
         sequence:
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2028,6 +2053,7 @@ actions:
           - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
             then:
               - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
                 target:
                   entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
               - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -2040,6 +2066,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2047,12 +2074,14 @@ actions:
                     continue_on_timeout: false
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ target_mode }}"
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2068,6 +2097,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2075,6 +2105,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2098,6 +2129,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2169,13 +2201,26 @@ actions:
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
           # Set mode and switch map
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ target_mode }}"
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2191,6 +2236,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2202,6 +2248,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2213,6 +2260,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2220,6 +2268,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2243,6 +2292,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2314,13 +2364,26 @@ actions:
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
           # Set mode and switch map
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ target_mode }}"
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2336,6 +2399,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2347,6 +2411,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2358,6 +2423,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2365,6 +2431,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2388,6 +2455,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2459,13 +2527,26 @@ actions:
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
           # Set mode and switch map
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ target_mode }}"
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2481,6 +2562,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2492,6 +2574,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2503,6 +2586,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2510,6 +2594,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2533,6 +2618,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2604,13 +2690,26 @@ actions:
               - stop: "Robot not docked, cannot start scheduled cleaning"
 
           # Set mode and switch map
+          # Disable customized_cleaning if active (enables global cleaning_mode)
+          - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+            then:
+              - action: switch.turn_off
+                continue_on_error: true  # Don't abort if switch unavailable
+                target:
+                  entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+              - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                timeout: 10
+                continue_on_timeout: false
+
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
               option: "{{ target_mode }}"
 
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -2626,6 +2725,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2637,6 +2737,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2648,6 +2749,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2655,6 +2757,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2678,6 +2781,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2752,13 +2856,26 @@ actions:
             then:
               # Base station map → Start cleaning immediately
               # Set mode and switch map
+              # Disable customized_cleaning if active (enables global cleaning_mode)
+              - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
+                then:
+                  - action: switch.turn_off
+                    continue_on_error: true  # Don't abort if switch unavailable
+                    target:
+                      entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
+                  - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
+                    timeout: 10
+                    continue_on_timeout: false
+
               - action: select.select_option
+                continue_on_error: true  # Don't abort if select entity unavailable
                 target:
                   entity_id: "{{ cleaning_mode_select }}"
                 data:
                   option: "{{ target_mode }}"
 
               - action: select.select_option
+                continue_on_error: true  # Don't abort if select entity unavailable
                 target:
                   entity_id: "{{ selected_map_select }}"
                 data:
@@ -2774,6 +2891,7 @@ actions:
                   - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                     then:
                       - action: switch.turn_on
+                        continue_on_error: true  # Don't abort if switch unavailable
                         target:
                           entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                       - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -2785,6 +2903,7 @@ actions:
                   - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                     then:
                       - action: switch.turn_on
+                        continue_on_error: true  # Don't abort if switch unavailable
                         target:
                           entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                       - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2794,6 +2913,7 @@ actions:
               - if: "{{ use_segment_service and has_segments }}"
                 then:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2801,6 +2921,7 @@ actions:
                       repeats: "{{ target_map_config.cleaning_repeats }}"
                 else:
                   - action: vacuum.start
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
 
@@ -2824,6 +2945,7 @@ actions:
                         {% else %}{{ target_mode }}{% endif %}
                   # Send actionable notification with buttons
                   - action: !input scheduled_notification_service
+                    continue_on_error: true  # Don't abort if notification device unavailable
                     data:
                       title: !input scheduled_notification_title
                       message: !input scheduled_notification_message
@@ -2925,6 +3047,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -2937,6 +3060,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -2947,11 +3071,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -2983,6 +3109,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -2990,6 +3117,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -3004,11 +3132,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -3019,11 +3149,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3042,6 +3174,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -3145,6 +3278,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -3155,11 +3289,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3167,6 +3303,7 @@ actions:
 
           # Step 4: Manual mop washing (controlled preparation)
           - action: button.press
+            continue_on_error: true  # Don't abort if button unavailable
             target:
               entity_id: "button.{{ vacuum_base_name }}_self_clean"
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
@@ -3182,6 +3319,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -3193,6 +3331,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -3223,6 +3362,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -3230,6 +3370,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -3244,11 +3385,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -3259,11 +3402,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3281,6 +3426,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -3383,6 +3529,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -3395,6 +3542,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -3405,11 +3553,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3441,6 +3591,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -3448,6 +3599,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -3462,11 +3614,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -3477,11 +3631,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3500,6 +3656,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -3604,6 +3761,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -3614,11 +3772,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3626,6 +3786,7 @@ actions:
 
           # Step 4: Manual mop washing (controlled preparation)
           - action: button.press
+            continue_on_error: true  # Don't abort if button unavailable
             target:
               entity_id: "button.{{ vacuum_base_name }}_self_clean"
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
@@ -3641,6 +3802,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -3652,6 +3814,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -3682,6 +3845,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -3689,6 +3853,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -3703,11 +3868,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -3718,11 +3885,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3741,6 +3910,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -3844,6 +4014,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -3856,6 +4027,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -3866,11 +4038,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3902,6 +4076,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -3909,6 +4084,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -3923,11 +4099,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -3938,11 +4116,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -3961,6 +4141,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -4065,6 +4246,7 @@ actions:
 
           # Step 1: Disable customized_cleaning (enables global cleaning_mode_select)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
           - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
@@ -4075,11 +4257,13 @@ actions:
           - variables:
               original_self_clean_state: "{{ states('switch.' ~ vacuum_base_name ~ '_self_clean') }}"
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_self_clean"
 
           # Step 3: Set cleaning mode
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -4087,6 +4271,7 @@ actions:
 
           # Step 4: Manual mop washing (controlled preparation)
           - action: button.press
+            continue_on_error: true  # Don't abort if button unavailable
             target:
               entity_id: "button.{{ vacuum_base_name }}_self_clean"
           - wait_template: "{{ states('sensor.' ~ vacuum_base_name ~ '_self_wash_base_status') in ['washing', 'clean_add_water'] }}"
@@ -4102,6 +4287,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_customized_cleaning', 'on') }}"
@@ -4113,6 +4299,7 @@ actions:
               - if: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'off') }}"
                 then:
                   - action: switch.turn_on
+                    continue_on_error: true  # Don't abort if switch unavailable
                     target:
                       entity_id: "switch.{{ vacuum_base_name }}_cleaning_sequence"
                   - wait_template: "{{ is_state('switch.' ~ vacuum_base_name ~ '_cleaning_sequence', 'on') }}"
@@ -4143,6 +4330,7 @@ actions:
                     value_template: "{{ notification_map_segments | length > 0 }}"
                 sequence:
                   - action: dreame_vacuum.vacuum_clean_segment
+                    continue_on_error: true  # Don't abort if vacuum unavailable
                     target:
                       entity_id: "{{ vacuum_entity }}"
                     data:
@@ -4150,6 +4338,7 @@ actions:
                       repeats: "{{ notification_cleaning_repeats }}"
             default:
               - action: vacuum.start
+                continue_on_error: true  # Don't abort if vacuum unavailable
                 target:
                   entity_id: "{{ vacuum_entity }}"
 
@@ -4164,11 +4353,13 @@ actions:
                   seconds: "{{ pause_delay_after_undock }}"
           # Pause for manual transport
           - action: vacuum.pause
+            continue_on_error: true  # Don't abort if vacuum unavailable
             target:
               entity_id: "{{ vacuum_entity }}"
 
           # Step 7: Switch to target map
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ selected_map_select }}"
             data:
@@ -4179,11 +4370,13 @@ actions:
 
           # Step 8: Re-disable customized_cleaning (map switch re-enables it)
           - action: switch.turn_off
+            continue_on_error: true  # Don't abort if switch unavailable
             target:
               entity_id: "switch.{{ vacuum_base_name }}_customized_cleaning"
 
           # Step 9: Re-set cleaning mode (map switch overwrites it)
           - action: select.select_option
+            continue_on_error: true  # Don't abort if select entity unavailable
             target:
               entity_id: "{{ cleaning_mode_select }}"
             data:
@@ -4202,6 +4395,7 @@ actions:
                   map_name: "{{ notification_target_map_name }}"
                   current_map: "{{ states(selected_map_select) }}"
               - action: !input pickup_notification_service
+                continue_on_error: true  # Don't abort if notification device unavailable
                 data:
                   title: !input pickup_notification_title
                   message: !input pickup_notification_message
@@ -4348,6 +4542,7 @@ actions:
                     value_template: "{{ current_map_name != base_station_map }}"
                 sequence:
                   - action: select.select_option
+                    continue_on_error: true  # Don't abort if select entity unavailable
                     target:
                       entity_id: "{{ selected_map_select }}"
                     data:
